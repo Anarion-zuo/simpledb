@@ -10,6 +10,22 @@ import java.util.*;
 import java.io.*;
 
 /**
+ *
+ * --------------------
+ *        header
+ * --------------------
+ *
+ *
+ *
+ *        pages
+ *
+ *
+ *
+ * --------------------
+ *
+ */
+
+/**
  * Each instance of HeapPage stores data for one page of HeapFiles and 
  * implements the Page interface that is used by BufferPool.
  *
@@ -51,7 +67,7 @@ public class HeapPage implements Page {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
 
         // allocate and read the header slots of this page
-        header = new byte[getHeaderSize()];
+        /*header = new byte[getHeaderSize()];
         for (int i=0; i<header.length; i++)
             header[i] = dis.readByte();
         
@@ -63,9 +79,36 @@ public class HeapPage implements Page {
         }catch(NoSuchElementException e){
             e.printStackTrace();
         }
-        dis.close();
+        dis.close();*/
+        header = new byte[getHeaderSize()];
+        tuples = new Tuple[numSlots];
+        loadHeapData(data);
 
         setBeforeImage();
+    }
+
+    public void loadHeapData(byte[] data) throws IOException {
+        if (data == null) {
+            System.err.println("empty page read from disk");
+        }
+        if (data.length != BufferPool.getPageSize()) {
+            System.err.println("disk page size inconsistent with memory config");
+        }
+
+        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
+
+        // allocate and read the header slots of this page
+        for (int i=0; i<header.length; i++)
+            header[i] = dis.readByte();
+
+        try{
+            // allocate and read the actual records of this page
+            for (int i=0; i<tuples.length; i++)
+                tuples[i] = readNextTuple(dis,i);
+        }catch(NoSuchElementException e){
+            e.printStackTrace();
+        }
+        dis.close();
     }
 
     /** Retrieve the number of tuples on this page.
@@ -73,19 +116,23 @@ public class HeapPage implements Page {
     */
     private int getNumTuples() {        
         // some code goes here
-        return 0;
-
+        // floor((BufferPool.getPageSize()*8) / (tuple size * 8 + 1))
+        return (BufferPool.getPageSize() * 8) / (td.getSize() * 8 + 1);
     }
 
     /**
      * Computes the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
-    private int getHeaderSize() {        
-        
+    private int getHeaderSize() {
         // some code goes here
-        return 0;
-                 
+        // ceiling(no. tuple slots / 8)
+        int ret = getNumTuples() / 8;
+        int m = getNumTuples() % 8;
+        if (m > 0) {
+            ++ret;
+        }
+        return ret;
     }
     
     /** Return a view of this page before it was modified
@@ -118,7 +165,8 @@ public class HeapPage implements Page {
      */
     public HeapPageId getId() {
     // some code goes here
-    throw new UnsupportedOperationException("implement this");
+    //throw new UnsupportedOperationException("implement this");
+        return pid;
     }
 
     /**
@@ -286,9 +334,25 @@ public class HeapPage implements Page {
     /**
      * Returns the number of empty slots on this page.
      */
+    private int countBit(byte bits, int count) {
+        int ret = 0;
+        for (int i = 0; i < count; ++i) {
+            if ((bits & (1 << i)) != 0) {
+                ++ret;
+            }
+        }
+        return ret;
+    }
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+        int bitCount = getNumTuples();
+        int ret = 0;
+        for (int i = 0; i < bitCount / 8 - 1; ++i) {
+            ret += countBit(header[i], 8);
+        }
+        int moreBit = bitCount % 8;
+        ret += countBit(header[bitCount / 8 - 1], moreBit);
+        return getNumTuples() - ret;
     }
 
     /**
@@ -296,7 +360,9 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // some code goes here
-        return false;
+        int byteIndex = i / 8;
+        int bitOffset = i % 8;
+        return (header[byteIndex] & (1 << bitOffset)) != 0;
     }
 
     /**
@@ -305,6 +371,54 @@ public class HeapPage implements Page {
     private void markSlotUsed(int i, boolean value) {
         // some code goes here
         // not necessary for lab1
+        int byteIndex = i / 8;
+        int bitOffset = i % 8;
+        byte v = 0;
+        if (value) {
+            v = 1;
+        }
+        header[byteIndex] = (byte) (header[byteIndex] | (v << bitOffset));
+    }
+
+    int findNonemptyPageStarting(int index) {
+        while (index < numSlots) {
+            if (isSlotUsed(index)) {
+                return index;
+            }
+            ++index;
+        }
+        return index;
+    }
+
+    class TupleIterator implements Iterator<Tuple> {
+
+        int index = 0;
+        HeapPage page;
+
+        TupleIterator(int index, int size, HeapPage page) {
+            this.page = page;
+            this.index = this.page.findNonemptyPageStarting(index);
+        }
+
+        // check whether I am on a valid slot now.
+        @Override
+        public boolean hasNext() {
+            if (index == page.numSlots) {
+                return false;
+            }
+            int ret = findNonemptyPageStarting(index);
+            return ret != page.numSlots;
+        }
+
+        @Override
+        public Tuple next() {
+            // checked hasNext before calling this
+            // this index is certainly valid
+            Tuple ret = page.tuples[index];
+            // move to the next index
+            index = page.findNonemptyPageStarting(index + 1);
+            return ret;
+        }
     }
 
     /**
@@ -313,7 +427,7 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+        return new TupleIterator(0, numSlots, this);
     }
 
 }

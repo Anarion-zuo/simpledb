@@ -1,8 +1,10 @@
 package simpledb.storage;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Tuple maintains information about the contents of a tuple. Tuples have a
@@ -13,7 +15,8 @@ public class Tuple implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private TupleDesc schema;
+    private TupleDesc tupleDesc;
+    private Field[] fieldList;
 
     /**
      * Create a new tuple with the specified schema (type).
@@ -24,7 +27,9 @@ public class Tuple implements Serializable {
      */
     public Tuple(TupleDesc td) {
         // some code goes here
-        schema = td;
+        tupleDesc = td;
+        fieldList = new Field[td.numFields()];
+        Arrays.fill(fieldList, null);
     }
 
     /**
@@ -32,7 +37,7 @@ public class Tuple implements Serializable {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return schema;
+        return tupleDesc;
     }
 
     /**
@@ -64,6 +69,7 @@ public class Tuple implements Serializable {
      */
     public void setField(int i, Field f) {
         // some code goes here
+        fieldList[i] = f;
     }
 
     /**
@@ -74,7 +80,7 @@ public class Tuple implements Serializable {
      */
     public Field getField(int i) {
         // some code goes here
-        return null;
+        return fieldList[i];
     }
 
     /**
@@ -87,7 +93,34 @@ public class Tuple implements Serializable {
      */
     public String toString() {
         // some code goes here
-        throw new UnsupportedOperationException("Implement this");
+        //throw new UnsupportedOperationException("Implement this");
+        StringBuilder ret = new StringBuilder("");
+        for (int i = 0; i < fieldList.length - 1; ++i) {
+            ret.append(fieldList[i].toString());
+            ret.append('\t');
+        }
+        ret.append(fieldList[fieldList.length - 1].toString());
+        return ret.toString();
+    }
+
+    class FieldIterator implements Iterator<Field> {
+        int index;
+        Field[] fields;
+
+        FieldIterator(int index, Field[] fields) {
+            this.index = index;
+            this.fields = fields;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return index + 1 < fields.length;
+        }
+
+        @Override
+        public Field next() {
+            return fields[index++];
+        }
     }
 
     /**
@@ -97,7 +130,7 @@ public class Tuple implements Serializable {
     public Iterator<Field> fields()
     {
         // some code goes here
-        return null;
+        return new FieldIterator(0, fieldList);
     }
 
     /**
@@ -106,5 +139,6 @@ public class Tuple implements Serializable {
     public void resetTupleDesc(TupleDesc td)
     {
         // some code goes here
+        // TODO what is this???
     }
 }

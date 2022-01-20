@@ -134,9 +134,28 @@ public class Catalog {
         return fetchTableById(tableid).pkeyField;
     }
 
+    private class TableIdIterator implements Iterator<Integer> {
+
+        Iterator<Table> listIterator;
+
+        TableIdIterator(Iterator<Table> listIterator) {
+            this.listIterator = listIterator;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return listIterator.hasNext();
+        }
+
+        @Override
+        public Integer next() {
+            return listIterator.next().getId();
+        }
+    }
+
     public Iterator<Integer> tableIdIterator() {
         // some code goes here
-        return null;
+        return new TableIdIterator(tableList.iterator());
     }
 
     public String getTableName(int id) {
