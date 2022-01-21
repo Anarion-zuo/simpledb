@@ -50,7 +50,7 @@ public class TupleDesc implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private List<TDItem> items;
+    private ArrayList<TDItem> items;
 
     /**
      * Create a new TupleDesc with typeAr.length fields with fields of the
@@ -187,7 +187,7 @@ public class TupleDesc implements Serializable {
      * Helper function not for public calling.
      * @param items
      */
-    private TupleDesc(List<TDItem> items) {
+    private TupleDesc(ArrayList<TDItem> items) {
         this.items = items;
     }
 
@@ -207,6 +207,18 @@ public class TupleDesc implements Serializable {
         items.addAll(td1.items);
         items.addAll(td2.items);
         return new TupleDesc(items);
+    }
+
+    /**
+     * Add prefix to each field name.
+     * @return the new desc
+     */
+    public TupleDesc prefixDesc(String prefix) {
+        ArrayList<TDItem> newItems = new ArrayList<>();
+        for (int i = 0; i < items.size(); ++i) {
+            newItems.add(new TDItem(items.get(i).fieldType, prefix + items.get(i).fieldName));
+        }
+        return new TupleDesc(newItems);
     }
 
     /**
