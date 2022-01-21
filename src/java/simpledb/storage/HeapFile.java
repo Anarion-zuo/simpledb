@@ -180,6 +180,9 @@ public class HeapFile implements DbFile {
 
         @Override
         public void open() throws DbException, TransactionAbortedException {
+            if (opened) {
+                throw new DbException("same iterator opened twice");
+            }
             opened = true;
             moveToNext();
         }
@@ -226,6 +229,8 @@ public class HeapFile implements DbFile {
         @Override
         public void rewind() throws DbException, TransactionAbortedException {
             curIndex = new HeapPageId(curIndex.getTableId(), 0);
+            tupleIterator = null;
+            moveToNext();
         }
 
         @Override
