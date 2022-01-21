@@ -36,7 +36,7 @@ public class BufferPool {
 
     private final int numPages;
     private Page[] pageList;
-    private Deque<Page> freeList;
+    private Deque<Page> freeList = new LinkedList<>();;
     int unallocatedIndex = 0;
 
     /**
@@ -56,7 +56,6 @@ public class BufferPool {
         // some code goes here
         this.numPages = numPages;
         pageList = new Page[numPages];
-        freeList = new LinkedList<>();
         initFreeList();
     }
     
@@ -93,17 +92,19 @@ public class BufferPool {
         throws TransactionAbortedException, DbException {
         // some code goes here
         // lab 1 version
+        // must allocate
+        Page page = null;
         if (unallocatedIndex < numPages) {
             ++unallocatedIndex;
             try {
-                return new HeapPage((HeapPageId) pid, new byte[pageSize]);
+                page = new HeapPage((HeapPageId) pid, new byte[pageSize]);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         } else {
             throw new DbException("lab1 naive impl, all pages allocated...");
         }
-        return null;
+        return page;
     }
 
     /**
