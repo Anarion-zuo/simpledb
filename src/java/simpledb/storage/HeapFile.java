@@ -25,6 +25,7 @@ public class HeapFile implements DbFile {
 
     private File file;
     private TupleDesc tupleDesc;
+    private HashMap<PageId, Page> pageMap = new HashMap<>();
 
     /**
      * Constructs a heap file backed by the specified file.
@@ -163,7 +164,11 @@ public class HeapFile implements DbFile {
          */
         private void moveToNext() {
             while (curIndex.getPageNumber() < heapFile.numPages()) {
-                HeapPage page = (HeapPage) readPage(curIndex);
+                HeapPage page = (HeapPage) pageMap.get(curIndex);
+                if (page == null) {
+                    page = (HeapPage) readPage(curIndex);
+                    pageMap.put(curIndex, page);
+                }
                 tupleIterator = page.iterator();
                 if (tupleIterator.hasNext()) {
                     return;
