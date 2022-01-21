@@ -79,6 +79,7 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
         // some code goes here
+//        System.out.printf("%d %d\n", pid.getTableId(), pid.getPageNumber());
         if (!(pid instanceof HeapPageId)) {
             return null;
         }
