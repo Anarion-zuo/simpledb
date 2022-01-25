@@ -23,9 +23,9 @@ import java.util.*;
  */
 public class HeapFile implements DbFile {
 
-    private File file;
-    private TupleDesc tupleDesc;
-    private HashMap<PageId, Page> pageMap = new HashMap<>();
+    private final File file;
+    private final TupleDesc tupleDesc;
+    private final HashMap<PageId, Page> pageMap = new HashMap<>();  // page table
 
     /**
      * Constructs a heap file backed by the specified file.
@@ -62,6 +62,7 @@ public class HeapFile implements DbFile {
     public int getId() {
         // some code goes here
         //throw new UnsupportedOperationException("implement this");
+        // done as suggested
         return file.getAbsolutePath().hashCode();
     }
 
@@ -137,12 +138,11 @@ public class HeapFile implements DbFile {
         // not necessary for lab1
     }
 
-    private class HeapFileIterator implements DbFileIterator {
+    static class HeapFileIterator implements DbFileIterator {
 
         static final int DEFAULT_POOL_SIZE = 100;
 
         TransactionId transactionId;
-        BufferPool bufferPool;
         HeapFile heapFile;
         HeapPageId curIndex;
         Iterator<Tuple> tupleIterator;
@@ -151,7 +151,6 @@ public class HeapFile implements DbFile {
 
         HeapFileIterator(TransactionId tid, int numPages, HeapFile heapFile) {
             transactionId = tid;
-            bufferPool = new BufferPool(numPages);
             this.heapFile = heapFile;
             curIndex = new HeapPageId(heapFile.getId(), 0);
             tupleIterator = null;
@@ -165,10 +164,10 @@ public class HeapFile implements DbFile {
          */
         private void moveToNext() {
             while (curIndex.getPageNumber() < heapFile.numPages()) {
-                HeapPage page = (HeapPage) pageMap.get(curIndex);
+                HeapPage page = (HeapPage) heapFile.pageMap.get(curIndex);
                 if (page == null) {
-                    page = (HeapPage) readPage(curIndex);
-                    pageMap.put(curIndex, page);
+                    page = (HeapPage) heapFile.readPage(curIndex);
+                    heapFile.pageMap.put(curIndex, page);
                 }
                 tupleIterator = page.iterator();
                 if (tupleIterator.hasNext()) {
@@ -205,8 +204,9 @@ public class HeapFile implements DbFile {
             /**
              * We do not need what's above.
              * MoveNext process would never stop until a valid tuple iterator is created.
-             * If the tuple iterator is not valid, this means the move next process has
-             * failed to locate one, so globally, it should stop.
+             * next() would certainly call moveNext at the end of its execution.
+             * The iterator is ensured to be at the most probable valid place.
+             * Or the iterator is not valid, meaning the iteration must end.
              */
             if (!opened) {
                 return false;
@@ -225,6 +225,10 @@ public class HeapFile implements DbFile {
             Tuple ret = tupleIterator.next();
             if (!tupleIterator.hasNext()) {
                 curIndex = new HeapPageId(curIndex.getTableId(), 1 + curIndex.getPageNumber());
+                // If tupleIterator.hasNext returns false,
+                // and curIndex is currently at the last page,
+                // moveToNext here would not change the value of any of the attributes,
+                // leaving a hasNext call returning a correct result.
                 moveToNext();
             }
             return ret;

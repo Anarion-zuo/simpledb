@@ -21,7 +21,7 @@ import java.util.*;
  */
 public class Catalog {
 
-    private class Table {
+    private static class Table {
         DbFile file;
         String name;
         String pkeyField;
@@ -37,9 +37,9 @@ public class Catalog {
         }
     }
 
-    private Map<String, Table> nameToTable;
-    private Map<Integer, Table> idToTable;
-    private List<Table> tableList;
+    private final Map<String, Table> nameToTable;
+    private final Map<Integer, Table> idToTable;
+    private final List<Table> tableList;
 
     /**
      * Constructor.
@@ -59,7 +59,7 @@ public class Catalog {
      *    this file/tupledesc param for the calls getTupleDesc and getFile
      * @param name the name of the table -- may be an empty string.  May not be null.  If a name
      * conflict exists, use the last table to be added as the table for a given name.
-     * @param pkeyField the name of the primary key field
+     * @param pkeyField the name of the primary key field; may be null
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
@@ -70,7 +70,7 @@ public class Catalog {
     }
 
     public void addTable(DbFile file, String name) {
-        addTable(file, name, "");
+        addTable(file, name, null);
     }
 
     /**
@@ -91,6 +91,7 @@ public class Catalog {
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
         if (name == null) {
+            // name may not be null
             throw new NoSuchElementException();
         }
         var table = nameToTable.get(name);
@@ -100,6 +101,12 @@ public class Catalog {
         return table.getId();
     }
 
+    /**
+     *
+     * @param tableid The id of the table, as specified by the DbFile.getId()
+     * @return the able with the specified id
+     * @throws NoSuchElementException if the table doesn't exist
+     */
     private Table fetchTableById(int tableid) throws NoSuchElementException {
         var table = idToTable.get(tableid);
         if (table == null) {
@@ -134,7 +141,7 @@ public class Catalog {
         return fetchTableById(tableid).pkeyField;
     }
 
-    private class TableIdIterator implements Iterator<Integer> {
+    private static class TableIdIterator implements Iterator<Integer> {
 
         Iterator<Table> listIterator;
 

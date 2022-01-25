@@ -67,19 +67,6 @@ public class HeapPage implements Page {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
 
         // allocate and read the header slots of this page
-        /*header = new byte[getHeaderSize()];
-        for (int i=0; i<header.length; i++)
-            header[i] = dis.readByte();
-        
-        tuples = new Tuple[numSlots];
-        try{
-            // allocate and read the actual records of this page
-            for (int i=0; i<tuples.length; i++)
-                tuples[i] = readNextTuple(dis,i);
-        }catch(NoSuchElementException e){
-            e.printStackTrace();
-        }
-        dis.close();*/
         header = new byte[getHeaderSize()];
         tuples = new Tuple[numSlots];
         loadHeapData(data);
@@ -87,6 +74,13 @@ public class HeapPage implements Page {
         setBeforeImage();
     }
 
+    /**
+     * Copied from constructor lab code.
+     * Extracted to form public method for other uses.
+     * Only loads the data, not allocating header or tuple array.
+     * @param data page data read from disk
+     * @throws IOException
+     */
     public void loadHeapData(byte[] data) throws IOException {
         if (data == null) {
             System.err.println("empty page read from disk");
@@ -390,12 +384,12 @@ public class HeapPage implements Page {
         return index;
     }
 
-    class TupleIterator implements Iterator<Tuple> {
+    private static class TupleIterator implements Iterator<Tuple> {
 
         int index = 0;
         HeapPage page;
 
-        TupleIterator(int index, int size, HeapPage page) {
+        TupleIterator(int index, HeapPage page) {
             this.page = page;
             this.index = this.page.findNonemptyPageStarting(index);
         }
@@ -406,7 +400,7 @@ public class HeapPage implements Page {
             if (index == page.numSlots) {
                 return false;
             }
-            int ret = findNonemptyPageStarting(index);
+            int ret = page.findNonemptyPageStarting(index);
             return ret != page.numSlots;
         }
 
@@ -416,6 +410,7 @@ public class HeapPage implements Page {
             // this index is certainly valid
             Tuple ret = page.tuples[index];
             // move to the next index
+            // start finding at the next index
             index = page.findNonemptyPageStarting(index + 1);
             return ret;
         }
@@ -427,7 +422,7 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return new TupleIterator(0, numSlots, this);
+        return new TupleIterator(0, this);
     }
 
 }

@@ -50,7 +50,7 @@ public class TupleDesc implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private ArrayList<TDItem> items;
+    private final ArrayList<TDItem> items;
 
     /**
      * Create a new TupleDesc with typeAr.length fields with fields of the
@@ -65,17 +65,12 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
         // some code goes here
-        /*if (typeAr == null) {
-            throw new DbException("#fields null");
-        }
-        if (typeAr.length < 1) {
-            throw new DbException("#fields <= 0");
-        }
-        if (fieldAr != null) {
-            if (typeAr.length != fieldAr.length && fieldAr.length != 0) {
-                throw new DbException("#fields != #fieldnames");
-            }
-        }*/
+        /**
+         * There should be some exception thrown here
+         * for null argument
+         * but the constructor's def does not allow it
+         * so that's that
+         */
         items = new ArrayList<>();
         for (int i = 0; i < typeAr.length; ++i) {
             if (fieldAr == null) {
@@ -96,12 +91,12 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr) {
         // some code goes here
-        /*if (typeAr == null) {
-            throw new DbException("#fields null");
-        }
-        if (typeAr.length < 1) {
-            throw new DbException("#fields <= 0");
-        }*/
+        /**
+         * There should be some exception thrown here
+         * for null argument
+         * but the constructor's def does not allow it
+         * so that's that
+         */
         items = new ArrayList<>();
         for (int i = 0; i < typeAr.length; ++i) {
             items.add(new TDItem(typeAr[i], null));
@@ -158,8 +153,8 @@ public class TupleDesc implements Serializable {
         // some code goes here
         for (int i = 0; i < items.size(); ++i) {
             if (items.get(i).fieldName == null) {
-                if (name != null) {
-                    throw new NoSuchElementException();
+                if (name == null) {
+                    return i;
                 }
             }
             if (items.get(i).fieldName.equals(name)) {
@@ -215,8 +210,8 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc prefixDesc(String prefix) {
         ArrayList<TDItem> newItems = new ArrayList<>();
-        for (int i = 0; i < items.size(); ++i) {
-            newItems.add(new TDItem(items.get(i).fieldType, prefix + items.get(i).fieldName));
+        for (TDItem item : items) {
+            newItems.add(new TDItem(item.fieldType, prefix + item.fieldName));
         }
         return new TupleDesc(newItems);
     }

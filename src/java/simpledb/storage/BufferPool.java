@@ -35,17 +35,7 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     private final int numPages;
-    private Page[] pageList;
-    private Deque<Page> freeList = new LinkedList<>();;
     int unallocatedIndex = 0;
-
-    /**
-     * Put all pages into the free list.
-     * Called only by a constructor.
-     */
-    private void initFreeList() {
-        freeList.addAll(Arrays.asList(pageList));
-    }
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -55,8 +45,6 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // some code goes here
         this.numPages = numPages;
-        pageList = new Page[numPages];
-        initFreeList();
     }
     
     public static int getPageSize() {
