@@ -216,6 +216,9 @@ public class HeapFile implements DbFile {
 
         @Override
         public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
+            if (!opened) {
+                throw new NoSuchElementException("accessing iterator not yet opened");
+            }
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
