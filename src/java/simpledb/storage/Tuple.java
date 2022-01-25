@@ -16,7 +16,8 @@ public class Tuple implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private TupleDesc tupleDesc;
-    private Field[] fieldList;
+    private final Field[] fieldList;
+    private RecordId recordId = null;
 
     /**
      * Create a new tuple with the specified schema (type).
@@ -46,7 +47,7 @@ public class Tuple implements Serializable {
      */
     public RecordId getRecordId() {
         // some code goes here
-        return null;
+        return recordId;
     }
 
     /**
@@ -57,6 +58,7 @@ public class Tuple implements Serializable {
      */
     public void setRecordId(RecordId rid) {
         // some code goes here
+        recordId = rid;
     }
 
     /**
@@ -103,7 +105,7 @@ public class Tuple implements Serializable {
         return ret.toString();
     }
 
-    class FieldIterator implements Iterator<Field> {
+    static class FieldIterator implements Iterator<Field> {
         int index;
         Field[] fields;
 
@@ -140,5 +142,6 @@ public class Tuple implements Serializable {
     {
         // some code goes here
         // TODO what is this???
+        tupleDesc = td;
     }
 }
