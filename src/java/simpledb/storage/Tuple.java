@@ -34,11 +34,11 @@ public class Tuple implements Serializable {
     }
 
     /**
-     * Called only by static utility methods.
+     * Convenient constructor.
      * @param td
      * @param fieldList
      */
-    private Tuple(TupleDesc td, Field[] fieldList) {
+    public Tuple(TupleDesc td, Field[] fieldList) {
         this.tupleDesc = td;
         this.fieldList = fieldList;
     }
