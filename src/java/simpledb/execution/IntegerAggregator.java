@@ -10,21 +10,9 @@ import java.util.*;
 /**
  * Knows how to compute some aggregate over a set of IntFields.
  */
-public class IntegerAggregator implements Aggregator {
+public class IntegerAggregator extends Aggregator {
 
     private static final long serialVersionUID = 1L;
-
-    private final int groupByField;
-    private final Type groupByFieldType;
-    private final int aggregateField;
-    private final Op operation;
-
-    // simoutaneously implement 2 scenario
-    // with and without group by
-    // use groupMap with groupby
-    private final HashMap<Field, ArrayList<Tuple>> groupMap = new HashMap<>();
-    // use nogroupList without groupby
-    private final ArrayList<Tuple> nogroupList = new ArrayList<>();
 
     /**
      * Aggregate constructor
@@ -43,45 +31,11 @@ public class IntegerAggregator implements Aggregator {
 
     public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
-        groupByField = gbfield;
-        groupByFieldType = gbfieldtype;
-        aggregateField = afield;
-        operation = what;
-    }
-
-    private Field getTupleGroupbyField(Tuple tuple) {
-        return tuple.getField(groupByField);
+        super(gbfield, gbfieldtype, afield, what);
     }
 
     private int getTupleAggregateVal(Tuple tuple) {
         return ((IntField) tuple.getField(aggregateField)).getValue();
-    }
-
-    private boolean hasNoGroupBy() {
-        return groupByField == NO_GROUPING;
-    }
-
-    /**
-     * Merge a new tuple into the aggregate, grouping as indicated in the
-     * constructor
-     * 
-     * @param tup
-     *            the Tuple containing an aggregate field and a group-by field
-     */
-    public void mergeTupleIntoGroup(Tuple tup) {
-        // some code goes here
-        if (hasNoGroupBy()) {
-            // use nogroupList without groupby
-            nogroupList.add(tup);
-            return;
-        }
-        var field = getTupleGroupbyField(tup);
-        var tupleList = groupMap.get(field);
-        if (tupleList == null) {
-            tupleList = new ArrayList<>();
-            groupMap.put(field, tupleList);
-        }
-        tupleList.add(tup);
     }
 
     private class TupleComparator implements Comparator<Tuple> {
@@ -128,7 +82,7 @@ public class IntegerAggregator implements Aggregator {
 
         Iterator<Map.Entry<Field, ArrayList<Tuple>>> mapIterator;
         boolean noGroupAccessed = false;
-        boolean opened;
+        boolean opened = false;
 
         public AggregatorOperator() {
             initEntryIterator();
