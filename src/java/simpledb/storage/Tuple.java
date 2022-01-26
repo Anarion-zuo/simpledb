@@ -34,6 +34,27 @@ public class Tuple implements Serializable {
     }
 
     /**
+     * Called only by static utility methods.
+     * @param td
+     * @param fieldList
+     */
+    private Tuple(TupleDesc td, Field[] fieldList) {
+        this.tupleDesc = td;
+        this.fieldList = fieldList;
+    }
+
+    public static Tuple merge(Tuple t1, Tuple t2) {
+        Field[] fieldList = new Field[t1.fieldList.length + t2.fieldList.length];
+        for (int i = 0; i < t1.fieldList.length; ++i) {
+            fieldList[i] = t1.fieldList[i];
+        }
+        for (int i = 0; i < t2.fieldList.length; ++i) {
+            fieldList[i + t1.fieldList.length] = t2.fieldList[i];
+        }
+        return new Tuple(TupleDesc.merge(t1.getTupleDesc(), t2.getTupleDesc()), fieldList);
+    }
+
+    /**
      * @return The TupleDesc representing the schema of this tuple.
      */
     public TupleDesc getTupleDesc() {
