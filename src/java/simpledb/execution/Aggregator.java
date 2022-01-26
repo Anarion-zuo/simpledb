@@ -1,13 +1,12 @@
 package simpledb.execution;
 
+import simpledb.common.DbException;
 import simpledb.common.Type;
-import simpledb.storage.Field;
-import simpledb.storage.Tuple;
-import simpledb.storage.TupleIterator;
+import simpledb.storage.*;
+import simpledb.transaction.TransactionAbortedException;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 
 /**
  * The common interface for any class that can compute an aggregate over a
@@ -121,10 +120,101 @@ public abstract class Aggregator implements Serializable {
     }
 
     /**
+     * Executes aggregate schemes.
+     * @param tupleList List of tuples to be aggregated.
+     * @return result of aggregation
+     */
+    abstract protected int doAggregate(ArrayList<Tuple> tupleList);
+
+    /**
+     * a OpIterator whose tuples are the pair (groupVal, aggregateVal)
+     * if using group, or a single (aggregateVal) if no grouping. The
+     * aggregateVal is determined by the type of aggregate specified in
+     * the constructor.
+     */
+    protected class AggregatorOperator implements OpIterator {
+
+        Iterator<Map.Entry<Field, ArrayList<Tuple>>> mapIterator;
+        boolean noGroupAccessed = false;
+        boolean opened = false;
+
+        public AggregatorOperator() {
+            initEntryIterator();
+        }
+
+        private void initEntryIterator() {
+            mapIterator = groupMap.entrySet().iterator();
+            noGroupAccessed = false;
+        }
+
+        @Override
+        public void open() throws DbException, TransactionAbortedException {
+            opened = true;
+            initEntryIterator();
+        }
+
+        @Override
+        public boolean hasNext() throws DbException, TransactionAbortedException {
+            if (!this.opened)
+                throw new IllegalStateException("Operator not yet open");
+            if (hasNoGroupBy()) {
+                return !noGroupAccessed;
+            }
+            return mapIterator.hasNext();
+        }
+
+        @Override
+        public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
+            if (!this.opened)
+                throw new IllegalStateException("Operator not yet open");
+            if (hasNoGroupBy()) {
+                noGroupAccessed = true;
+                return new Tuple(getTupleDesc(), new Field[] { new IntField(doAggregate(nogroupList))});
+            } else {
+                var entry = mapIterator.next();
+                var groupVal = entry.getKey();
+                var groupTuple = entry.getValue();
+                return new Tuple(getTupleDesc(), new Field[] {
+                        groupVal,
+                        new IntField(doAggregate(groupTuple))
+                });
+            }
+        }
+
+        @Override
+        public void rewind() throws DbException, TransactionAbortedException {
+            if (!this.opened)
+                throw new IllegalStateException("Operator not yet open");
+            initEntryIterator();
+        }
+
+        @Override
+        public TupleDesc getTupleDesc() {
+            if (hasNoGroupBy()) {
+                return new TupleDesc(new Type[] {Type.INT_TYPE});
+            } else {
+                return new TupleDesc(
+                        new Type[] {groupByFieldType, Type.INT_TYPE}
+                        // does not provide names for fields
+                );
+            }
+        }
+
+        @Override
+        public void close() {
+            if (!this.opened)
+                throw new IllegalStateException("Operator not yet open");
+            opened = false;
+        }
+    }
+
+    /**
      * Create a OpIterator over group aggregate results.
      * @see TupleIterator for a possible helper
      */
-    abstract OpIterator iterator();
+    public OpIterator iterator() {
+        return new AggregatorOperator();
+    }
 
     protected Field getTupleGroupbyField(Tuple tuple) {
         return tuple.getField(groupByField);
