@@ -1,7 +1,11 @@
 package simpledb.execution;
 
+import simpledb.common.DbException;
 import simpledb.common.Type;
-import simpledb.storage.Tuple;
+import simpledb.storage.*;
+import simpledb.transaction.TransactionAbortedException;
+
+import java.util.*;
 
 /**
  * Knows how to compute some aggregate over a set of IntFields.
@@ -9,6 +13,18 @@ import simpledb.storage.Tuple;
 public class IntegerAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
+
+    private final int groupByField;
+    private final Type groupByFieldType;
+    private final int aggregateField;
+    private final Op operation;
+
+    // simoutaneously implement 2 scenario
+    // with and without group by
+    // use groupMap with groupby
+    private final HashMap<Field, ArrayList<Tuple>> groupMap = new HashMap<>();
+    // use nogroupList without groupby
+    private final ArrayList<Tuple> nogroupList = new ArrayList<>();
 
     /**
      * Aggregate constructor
@@ -27,6 +43,22 @@ public class IntegerAggregator implements Aggregator {
 
     public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
+        groupByField = gbfield;
+        groupByFieldType = gbfieldtype;
+        aggregateField = afield;
+        operation = what;
+    }
+
+    private Field getTupleGroupbyField(Tuple tuple) {
+        return tuple.getField(groupByField);
+    }
+
+    private int getTupleAggregateVal(Tuple tuple) {
+        return ((IntField) tuple.getField(aggregateField)).getValue();
+    }
+
+    private boolean hasNoGroupBy() {
+        return groupByField == NO_GROUPING;
     }
 
     /**
@@ -38,6 +70,134 @@ public class IntegerAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
+        if (hasNoGroupBy()) {
+            // use nogroupList without groupby
+            nogroupList.add(tup);
+            return;
+        }
+        var field = getTupleGroupbyField(tup);
+        var tupleList = groupMap.get(field);
+        if (tupleList == null) {
+            tupleList = new ArrayList<>();
+            groupMap.put(field, tupleList);
+        }
+        tupleList.add(tup);
+    }
+
+    private class TupleComparator implements Comparator<Tuple> {
+        @Override
+        public int compare(Tuple x, Tuple y) {
+            int left = getTupleAggregateVal(x);
+            int right = getTupleAggregateVal(y);
+            return Integer.compare(left, right);
+        }
+    }
+
+    /**
+     * Executes aggregate schemes.
+     * @param tupleList List of tuples to be aggregated.
+     * @return result of aggregation
+     */
+    private int doAggregate(ArrayList<Tuple> tupleList) {
+        switch (operation) {
+            case MIN:
+                return getTupleAggregateVal(tupleList.stream().min(new TupleComparator()).get());
+            case MAX:
+                return getTupleAggregateVal(tupleList.stream().max(new TupleComparator()).get());
+            case SUM:
+                int ret = 0;
+                for (var tuple : tupleList) {
+                    ret += getTupleAggregateVal(tuple);
+                }
+                return ret;
+            case COUNT:
+                return tupleList.size();
+            case AVG:
+                ret = 0;
+                for (var tuple : tupleList) {
+                    ret += getTupleAggregateVal(tuple);
+                }
+                return ret / tupleList.size();
+            default:
+//                throw new ExecutionControl.NotImplementedException("aggregate operation not implemented");
+        }
+        return -1;
+    }
+
+    private class AggregatorOperator implements OpIterator {
+
+        Iterator<Map.Entry<Field, ArrayList<Tuple>>> mapIterator;
+        boolean noGroupAccessed = false;
+        boolean opened;
+
+        public AggregatorOperator() {
+            initEntryIterator();
+        }
+
+        private void initEntryIterator() {
+            mapIterator = groupMap.entrySet().iterator();
+            noGroupAccessed = false;
+        }
+
+        @Override
+        public void open() throws DbException, TransactionAbortedException {
+            opened = true;
+            initEntryIterator();
+        }
+
+        @Override
+        public boolean hasNext() throws DbException, TransactionAbortedException {
+            if (!this.opened)
+                throw new IllegalStateException("Operator not yet open");
+            if (hasNoGroupBy()) {
+                return !noGroupAccessed;
+            }
+            return mapIterator.hasNext();
+        }
+
+        @Override
+        public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
+            if (!this.opened)
+                throw new IllegalStateException("Operator not yet open");
+            if (hasNoGroupBy()) {
+                noGroupAccessed = true;
+                return new Tuple(getTupleDesc(), new Field[] { new IntField(doAggregate(nogroupList))});
+            } else {
+                var entry = mapIterator.next();
+                var groupVal = entry.getKey();
+                var groupTuple = entry.getValue();
+                return new Tuple(getTupleDesc(), new Field[] {
+                        groupVal,
+                        new IntField(doAggregate(groupTuple))
+                });
+            }
+        }
+
+        @Override
+        public void rewind() throws DbException, TransactionAbortedException {
+            if (!this.opened)
+                throw new IllegalStateException("Operator not yet open");
+            initEntryIterator();
+        }
+
+        @Override
+        public TupleDesc getTupleDesc() {
+            if (hasNoGroupBy()) {
+                return new TupleDesc(new Type[] {Type.INT_TYPE});
+            } else {
+                return new TupleDesc(
+                    new Type[] {groupByFieldType, Type.INT_TYPE}
+                    // does not provide names for fields
+                );
+            }
+        }
+
+        @Override
+        public void close() {
+            if (!this.opened)
+                throw new IllegalStateException("Operator not yet open");
+            opened = false;
+        }
     }
 
     /**
@@ -50,8 +210,7 @@ public class IntegerAggregator implements Aggregator {
      */
     public OpIterator iterator() {
         // some code goes here
-        throw new
-        UnsupportedOperationException("please implement me for lab2");
+        return new AggregatorOperator();
     }
 
 }
