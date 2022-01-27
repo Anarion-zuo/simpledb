@@ -121,8 +121,8 @@ public class HeapPage implements Page {
     private int getHeaderSize() {
         // some code goes here
         // ceiling(no. tuple slots / 8)
-        int ret = getNumTuples() / 8;
-        int m = getNumTuples() % 8;
+        int ret = numSlots / 8;
+        int m = numSlots % 8;
         if (m > 0) {
             ++ret;
         }
@@ -305,6 +305,16 @@ public class HeapPage implements Page {
     public void insertTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
+
+        // find free
+        int index = findEmptyPageStarting(0);
+        if (index >= numSlots) {
+            throw new DbException("HeapPage full, cannot insert tuple");
+        }
+        markSlotUsed(index, true);
+        // must set record id according to addTuple test
+        t.setRecordId(new RecordId(getId(), index));
+        tuples[index] = t;
     }
 
     /**
@@ -339,14 +349,14 @@ public class HeapPage implements Page {
     }
     public int getNumEmptySlots() {
         // some code goes here
-        int bitCount = getNumTuples();
+        int bitCount = numSlots;
         int ret = 0;
-        for (int i = 0; i < bitCount / 8 - 1; ++i) {
+        for (int i = 0; i < bitCount / 8; ++i) {
             ret += countBit(header[i], 8);
         }
         int moreBit = bitCount % 8;
         ret += countBit(header[bitCount / 8 - 1], moreBit);
-        return getNumTuples() - ret;
+        return numSlots - ret;
     }
 
     /**
@@ -367,16 +377,26 @@ public class HeapPage implements Page {
         // not necessary for lab1
         int byteIndex = i / 8;
         int bitOffset = i % 8;
-        byte v = 0;
         if (value) {
-            v = 1;
+            header[byteIndex] = (byte) (header[byteIndex] | (1 << bitOffset));
+        } else {
+            header[byteIndex] = (byte) (header[byteIndex] & (~(1 << bitOffset)));
         }
-        header[byteIndex] = (byte) (header[byteIndex] | (v << bitOffset));
     }
 
-    int findNonemptyPageStarting(int index) {
+    private int findNonemptyPageStarting(int index) {
         while (index < numSlots) {
             if (isSlotUsed(index)) {
+                return index;
+            }
+            ++index;
+        }
+        return index;
+    }
+
+    private int findEmptyPageStarting(int index) {
+        while (index < numSlots) {
+            if (!isSlotUsed(index)) {
                 return index;
             }
             ++index;
