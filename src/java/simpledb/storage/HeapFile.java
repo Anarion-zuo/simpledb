@@ -119,20 +119,63 @@ public class HeapFile implements DbFile {
         return (int) (file.length() / BufferPool.getPageSize());
     }
 
+    /**
+     * If there is no page available with an empty slot, it must allocate.
+     * By allocating, this function writes null data to the offset of the page on disk.
+     * @return The first page's index with an empty slot.
+     */
+    private Page fetchAvailablePage(TransactionId tid) throws IOException, TransactionAbortedException, DbException {
+        // find available if possible
+        for (int i = 0; i < numPages(); ++i) {
+            PageId pid = new HeapPageId(getId(), i);
+            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
+            if (page.getNumEmptySlots() != 0) {
+                return page;
+            }
+        }
+        // no available found
+        extendFile(numPages());
+        return Database.getBufferPool().getPage(tid, new HeapPageId(getId(), numPages() - 1), Permissions.READ_WRITE);
+    }
+
+    /**
+     * Write null data to the offset of the page on disk.
+     * @param pageIndex index of the page.
+     */
+    private void extendFile(int pageIndex) throws IOException {
+        FileOutputStream outputStream = new FileOutputStream(file);
+        outputStream.getChannel().position((long) pageIndex * BufferPool.getPageSize());
+        byte[] data = new byte[BufferPool.getPageSize()];
+        for (int i = 0; i < data.length; ++i) {
+            data[i] = 0;
+        }
+        outputStream.write(data);
+        outputStream.close();
+    }
+
     // see DbFile.java for javadocs
     public List<Page> insertTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
         // some code goes here
-        return null;
         // not necessary for lab1
+        HeapPage page = (HeapPage) fetchAvailablePage(tid);
+        RecordId recordId = new RecordId(page.getId(), 0);
+        t.setRecordId(recordId);
+        page.insertTuple(t);
+
+        return new ArrayList<>(List.of(page));
     }
 
     // see DbFile.java for javadocs
     public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
         // some code goes here
-        return null;
         // not necessary for lab1
+        PageId pageId = t.getRecordId().getPageId();
+        HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
+        page.deleteTuple(t);
+
+        return new ArrayList<>(List.of(page));
     }
 
     static class HeapFileIterator implements DbFileIterator {
