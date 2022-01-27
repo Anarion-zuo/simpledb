@@ -61,8 +61,12 @@ public class HeapPage implements Page {
      * @see BufferPool#getPageSize()
      */
     public HeapPage(HeapPageId id, byte[] data) throws IOException {
+        this(id, data, Database.getCatalog().getTupleDesc(id.getTableId()));
+    }
+
+    public HeapPage(HeapPageId id, byte[] data, TupleDesc tupleDesc) throws IOException {
         this.pid = id;
-        this.td = Database.getCatalog().getTupleDesc(id.getTableId());
+        this.td = tupleDesc;
         this.numSlots = getNumTuples();
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
 
