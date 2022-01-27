@@ -94,7 +94,8 @@ public class HeapPageWriteTest extends SimpleDbTestBase {
      * Unit test for HeapPage.deleteTuple() with false tuples
      */
     @Test(expected=DbException.class)
-        public void deleteNonexistentTuple() throws Exception {
+    public void deleteNonexistentTuple() throws Exception {
+        // input tuple has the same index as the target, but with different content/format
         HeapPage page = new HeapPage(pid, HeapPageReadTest.EXAMPLE_DATA);
         page.deleteTuple(Utility.getHeapTuple(2, 2));
     }
@@ -125,6 +126,8 @@ public class HeapPageWriteTest extends SimpleDbTestBase {
         // now, the page should be empty.
         try {
             page.deleteTuple(first);
+            // throw if the preceding code did not throw
+            // this throw cannot be caught
             throw new Exception("page should be empty; expected DbException");
         } catch (DbException e) {
             // explicitly ignored
