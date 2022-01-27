@@ -310,8 +310,9 @@ public class HeapPage implements Page {
      * @throws DbException if the page is full (no empty slots) or tupledesc
      *         is mismatch.
      * @param t The tuple to add.
+     * @return the index where the tuple is inserted
      */
-    public void insertTuple(Tuple t) throws DbException {
+    public int insertTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
 
@@ -320,10 +321,15 @@ public class HeapPage implements Page {
         if (index >= numSlots) {
             throw new DbException("HeapPage full, cannot insert tuple");
         }
+        if (!t.getTupleDesc().equals(td)) {
+            throw new DbException("tupledesc not match");
+        }
         markSlotUsed(index, true);
         // must set record id according to addTuple test
         t.setRecordId(new RecordId(getId(), index));
         tuples[index] = t;
+
+        return index;
     }
 
     private final LinkedList<TransactionId> transactionSeq = new LinkedList<>();
