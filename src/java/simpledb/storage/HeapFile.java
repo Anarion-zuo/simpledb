@@ -16,7 +16,8 @@ import java.util.*;
  * closely with HeapPage. The format of HeapPages is described in the HeapPage
  * constructor.
  *
- * One `HeapFile` object for each table.
+ * Keep this in mind !!! : One `HeapFile` object for each table.
+ * `getId` returns the id of this file, aka this table.
  *
  * @see HeapPage#HeapPage
  * @author Sam Madden
@@ -25,7 +26,6 @@ public class HeapFile implements DbFile {
 
     private final File file;
     private final TupleDesc tupleDesc;
-    private final HashMap<PageId, Page> pageMap = new HashMap<>();  // page table
 
     /**
      * Constructs a heap file backed by the specified file.
@@ -80,17 +80,13 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
         // some code goes here
-//        System.out.printf("%d %d\n", pid.getTableId(), pid.getPageNumber());
         if (!(pid instanceof HeapPageId)) {
             return null;
         }
         HeapPage page = null;
         try {
-            // TODO fake transactionId
-            page = (HeapPage) Database.getBufferPool().getPage(new TransactionId(), pid, Permissions.READ_ONLY);
-        } catch (TransactionAbortedException e) {
-            e.printStackTrace();
-        } catch (DbException e) {
+            page = new HeapPage((HeapPageId) pid, new byte[BufferPool.getPageSize()]);
+        } catch (IOException e) {
             e.printStackTrace();
         }
         FileInputStream inputStream = null;
@@ -99,6 +95,7 @@ public class HeapFile implements DbFile {
             inputStream.getChannel().position((long) pid.getPageNumber() * BufferPool.getPageSize());
             var data = inputStream.readNBytes(BufferPool.getPageSize());
             page.loadHeapData(data);
+            inputStream.close();
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -162,13 +159,9 @@ public class HeapFile implements DbFile {
          * - this iterator is pointing to an invalid slot
          * - this iterator is null
          */
-        private void moveToNext() {
+        private void moveToNext() throws TransactionAbortedException, DbException {
             while (curIndex.getPageNumber() < heapFile.numPages()) {
-                HeapPage page = (HeapPage) heapFile.pageMap.get(curIndex);
-                if (page == null) {
-                    page = (HeapPage) heapFile.readPage(curIndex);
-                    heapFile.pageMap.put(curIndex, page);
-                }
+                HeapPage page = (HeapPage) Database.getBufferPool().getPage(transactionId, curIndex, Permissions.READ_WRITE);
                 tupleIterator = page.iterator();
                 if (tupleIterator.hasNext()) {
                     return;

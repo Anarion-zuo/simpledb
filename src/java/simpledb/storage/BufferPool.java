@@ -61,6 +61,8 @@ public class BufferPool {
     	BufferPool.pageSize = DEFAULT_PAGE_SIZE;
     }
 
+    private HashMap<PageId, Page> allocated = new HashMap<>();
+
     /**
      * Retrieve the specified page with the associated permissions.
      * Will acquire a lock and may block if that lock is held by another
@@ -76,19 +78,20 @@ public class BufferPool {
      * @param pid the ID of the requested page
      * @param perm the requested permissions on the page
      */
-    public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
-        throws TransactionAbortedException, DbException {
+    public Page getPage(TransactionId tid, PageId pid, Permissions perm)
+            throws TransactionAbortedException, DbException {
         // some code goes here
         // lab 1 version
+        Page page = allocated.get(pid);
+        if (page != null) {
+            return page;
+        }
         // must allocate
-        Page page = null;
         if (unallocatedIndex < numPages) {
             ++unallocatedIndex;
-            try {
-                page = new HeapPage((HeapPageId) pid, new byte[pageSize]);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+            page = dbFile.readPage(pid);
+            allocated.put(pid, page);
         } else {
             throw new DbException("lab1 naive impl, all pages allocated...");
         }
