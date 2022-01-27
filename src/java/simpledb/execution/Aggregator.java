@@ -191,11 +191,18 @@ public abstract class Aggregator implements Serializable {
         @Override
         public TupleDesc getTupleDesc() {
             if (hasNoGroupBy()) {
-                return new TupleDesc(new Type[] {Type.INT_TYPE});
+                return new TupleDesc(
+                        new Type[] {Type.INT_TYPE},
+                        new String[] {"aggResult"}
+                );
             } else {
                 return new TupleDesc(
-                        new Type[] {groupByFieldType, Type.INT_TYPE}
+                        new Type[] {groupByFieldType, Type.INT_TYPE},
                         // does not provide names for fields
+                        new String[] {
+                                "aggName(" + operation.toString() + ")",
+                                "aggResult"
+                        }
                 );
             }
         }
