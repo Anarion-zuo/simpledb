@@ -146,6 +146,31 @@ public class Tuple implements Serializable {
         }
     }
 
+    public boolean equals(Object o) {
+        if (o == null) {
+            return false;
+        }
+        if (!(o instanceof Tuple)) {
+            return false;
+        }
+        Tuple rhs = (Tuple) o;
+        if (!tupleDesc.equals(rhs.tupleDesc)) {
+            return false;
+        }
+        if (!recordId.equals(rhs.recordId)) {
+            return false;
+        }
+        if (fieldList.length != rhs.fieldList.length) {
+            return false;
+        }
+        for (int i = 0; i < fieldList.length; ++i) {
+            if (!fieldList[i].equals(rhs.fieldList[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * @return
      *        An iterator which iterates over all the fields of this tuple

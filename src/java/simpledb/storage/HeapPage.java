@@ -293,6 +293,15 @@ public class HeapPage implements Page {
     public void deleteTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
+        int index = t.getRecordId().getTupleNumber();
+        if (!isSlotUsed(index)) {
+            throw new DbException("deleting unused tuple slot");
+        }
+        Tuple localTuple = tuples[index];
+        if (!localTuple.equals(t)) {
+            throw new DbException("target tuple not identical with local tuple");
+        }
+        markSlotUsed(index, false);
     }
 
     /**
