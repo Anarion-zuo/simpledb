@@ -317,13 +317,25 @@ public class HeapPage implements Page {
         tuples[index] = t;
     }
 
+    private final LinkedList<TransactionId> transactionSeq = new LinkedList<>();
+    private final HashMap<TransactionId, Boolean> transactionIdToDirty = new HashMap<>();
+
     /**
      * Marks this page as dirty/not dirty and record that transaction
      * that did the dirtying
      */
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
-	// not necessary for lab1
+        // not necessary for lab1
+        Boolean oldDirty = transactionIdToDirty.get(tid);
+        if (oldDirty == null) {
+            transactionSeq.add(tid);
+            transactionIdToDirty.put(tid, dirty);
+        } else {
+            transactionIdToDirty.put(tid, dirty);
+            transactionSeq.remove(tid);
+            transactionSeq.add(tid);
+        }
     }
 
     /**
@@ -331,8 +343,17 @@ public class HeapPage implements Page {
      */
     public TransactionId isDirty() {
         // some code goes here
-	// Not necessary for lab1
-        return null;      
+        // Not necessary for lab1
+        for (int i = transactionSeq.size() - 1; i >= 0; --i) {
+            TransactionId transactionId = transactionSeq.get(i);
+            Boolean dirty = transactionIdToDirty.get(transactionId);
+            if (dirty != null) {
+                if (dirty) {
+                    return transactionId;
+                }
+            }
+        }
+        return null;
     }
 
     /**
