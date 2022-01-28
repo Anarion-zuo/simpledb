@@ -108,6 +108,20 @@ public class HeapFile implements DbFile {
     public void writePage(Page page) throws IOException {
         // some code goes here
         // not necessary for lab1
+        if (!(page instanceof HeapPage)) {
+            // deal with only heap page yet
+            System.err.println("can only writing heap pages");
+            return;
+        }
+        if (page.getId().getTableId() != getId()) {
+            System.err.println("wrting a page belonging to another table");
+        }
+        // use OutputStream cannot get correct behavior
+        // for no particular reason
+        RandomAccessFile writer = new RandomAccessFile(file, "rw");
+        writer.seek((long) BufferPool.getPageSize() * page.getId().getPageNumber());
+        writer.write(page.getPageData());
+        writer.close();
     }
 
     /**
