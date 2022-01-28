@@ -160,6 +160,16 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        // TODO locks
+        DbFile file = Database.getCatalog().getDatabaseFile(tableId);
+        var pages = file.insertTuple(tid, t);
+        for (var page : pages) {
+            page.markDirty(true, tid);
+            // BufferPoolWriteTest changed to save this operation
+            //file.writePage(page);
+            //System.out.println("page first byte: " + page.getPageData()[0] + " page first tuple used " + ((HeapPage)page).isSlotUsed(0));
+        }
+        // TODO add versions
     }
 
     /**
@@ -179,6 +189,13 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        // TODO locks
+        DbFile file = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        var pages = file.deleteTuple(tid, t);
+        for (var page : pages) {
+            page.markDirty(true, tid);
+        }
+        // TODO add versions
     }
 
     /**
