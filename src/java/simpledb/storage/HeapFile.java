@@ -188,21 +188,19 @@ public class HeapFile implements DbFile {
         return new ArrayList<>(List.of(page));
     }
 
-    static class HeapFileIterator implements DbFileIterator {
+    public class HeapFileIterator implements DbFileIterator {
 
         static final int DEFAULT_POOL_SIZE = 100;
 
         TransactionId transactionId;
-        HeapFile heapFile;
         HeapPageId curIndex;
         Iterator<Tuple> tupleIterator;
 
         boolean opened = false;   // lab1 naive impl
 
-        HeapFileIterator(TransactionId tid, int numPages, HeapFile heapFile) {
+        HeapFileIterator(TransactionId tid) {
             transactionId = tid;
-            this.heapFile = heapFile;
-            curIndex = new HeapPageId(heapFile.getId(), 0);
+            curIndex = new HeapPageId(getId(), 0);
             tupleIterator = null;
         }
 
@@ -213,7 +211,7 @@ public class HeapFile implements DbFile {
          * - this iterator is null
          */
         private void moveToNext() throws TransactionAbortedException, DbException {
-            while (curIndex.getPageNumber() < heapFile.numPages()) {
+            while (curIndex.getPageNumber() < numPages()) {
                 HeapPage page = (HeapPage) Database.getBufferPool().getPage(transactionId, curIndex, Permissions.READ_WRITE);
                 tupleIterator = page.iterator();
                 if (tupleIterator.hasNext()) {
@@ -255,7 +253,7 @@ public class HeapFile implements DbFile {
              * Or the iterator is not valid, meaning the iteration must end.
              */
             if (!opened) {
-                return false;
+                throw new DbException("HeapFileIterator not yet opened");
             }
             return tupleIterator.hasNext();
         }
@@ -296,7 +294,7 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
-        return new HeapFileIterator(tid, 100, this);
+        return new HeapFileIterator(tid);
     }
 
 }
