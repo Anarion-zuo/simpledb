@@ -19,6 +19,7 @@ import simpledb.storage.*;
 import simpledb.systemtest.SystemTestUtil;
 import static org.junit.Assert.*;
 import junit.framework.JUnit4TestAdapter;
+import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 public class BufferPoolWriteTest extends TestUtil.CreateHeapFile {
@@ -46,9 +47,19 @@ public class BufferPoolWriteTest extends TestUtil.CreateHeapFile {
                 byte[] emptyData = HeapPage.createEmptyPageData();
                 bw.write(emptyData);
                 bw.close();
-    			HeapPage p = new HeapPage(new HeapPageId(super.getId(), super.numPages() - 1),
-    					HeapPage.createEmptyPageData());
-    	        p.insertTuple(t);
+				//HeapPage p = new HeapPage(new HeapPageId(super.getId(), super.numPages() - 1), HeapPage.createEmptyPageData());
+				// Always access pages through BufferPool.getPage
+				// do not allocate page objects
+				// or after each operation page data must be flushed before eviction
+				HeapPage p = null;
+				try {
+					p = (HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(super.getId(), super.numPages() - 1), Permissions.READ_WRITE);
+				} catch (TransactionAbortedException e) {
+					e.printStackTrace();
+				}
+				assert p != null;
+				p.loadHeapData(HeapPage.createEmptyPageData());
+				p.insertTuple(t);
     			dirtypages.add(p);
     		}
     		return dirtypages;
@@ -127,7 +138,7 @@ public class BufferPoolWriteTest extends TestUtil.CreateHeapFile {
     	HeapFileDuplicates hfd = new HeapFileDuplicates(empty.getFile(), empty.getTupleDesc(), 10);
     	Database.getCatalog().addTable(hfd, SystemTestUtil.getUUID());
     	Database.getBufferPool().insertTuple(tid, hfd.getId(), Utility.getHeapTuple(1, 2));
-    	
+
     	// there should now be 10 tuples (on 10 different pages) in the buffer pool
     	DbFileIterator it = hfd.iterator(tid);
     	it.open();
