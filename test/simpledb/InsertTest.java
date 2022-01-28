@@ -19,6 +19,7 @@ import simpledb.transaction.TransactionId;
 public class InsertTest extends TestUtil.CreateHeapFile {
 
   private OpIterator scan1;
+  private OpIterator scanNull;
   private TransactionId tid;
 
   /**
@@ -34,6 +35,9 @@ public class InsertTest extends TestUtil.CreateHeapFile {
                     3, 4,
                     3, 6,
                     5, 7 });
+    // empty tuple list
+    this.scanNull = TestUtil.createTupleList(2,
+            new int[0]);
     tid = new TransactionId();
   }
 
@@ -59,6 +63,14 @@ public class InsertTest extends TestUtil.CreateHeapFile {
 
     // we should fit on one page
     assertEquals(1, empty.numPages());
+  }
+
+  @Test public void insertEmpty() throws Exception {
+    Insert op = new Insert(tid,scanNull, empty.getId());
+    op.open();
+    assertTrue(TestUtil.compareTuples(
+            Utility.getHeapTuple(0, 1), // should return number 0
+            op.next()));
   }
 
   /**
