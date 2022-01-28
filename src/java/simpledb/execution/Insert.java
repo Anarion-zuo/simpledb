@@ -54,6 +54,14 @@ public class Insert extends Operator {
         );
     }
 
+    /**
+     * Record whether this iterator has run through and not been rewound.
+     * Must not directly call child.hasNext() in fetchNext() to check this.
+     * Child may be empty (hasNext returns false) while this iterator must
+     * return a tuple valued 0 as the result of a insert operation.
+     */
+    private boolean hasRunThrough = false;
+
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
         child.open();
@@ -69,6 +77,7 @@ public class Insert extends Operator {
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
         child.rewind();
+        hasRunThrough = false;
     }
 
     /**
@@ -86,7 +95,7 @@ public class Insert extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
-        if (!child.hasNext()) {
+        if (hasRunThrough) {
             return null;
         }
         int count = 0;
@@ -99,6 +108,7 @@ public class Insert extends Operator {
             }
             ++count;
         }
+        hasRunThrough = true;
         return new Tuple(getTupleDesc(), new Field[] {new IntField(count)});
     }
 
