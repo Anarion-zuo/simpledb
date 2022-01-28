@@ -158,10 +158,7 @@ public class HeapFile implements DbFile {
     private void extendFile(int pageIndex) throws IOException {
         FileOutputStream outputStream = new FileOutputStream(file);
         outputStream.getChannel().position((long) pageIndex * BufferPool.getPageSize());
-        byte[] data = new byte[BufferPool.getPageSize()];
-        for (int i = 0; i < data.length; ++i) {
-            data[i] = 0;
-        }
+        byte[] data = HeapPage.createEmptyPageData();
         outputStream.write(data);
         outputStream.close();
     }
