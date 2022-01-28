@@ -321,7 +321,7 @@ public class HeapPage implements Page {
         // not necessary for lab1
 
         // find free
-        int index = findEmptyPageStarting(0);
+        int index = findEmptySlotStarting(0);
         if (index >= numSlots) {
             throw new DbException("HeapPage full, cannot insert tuple");
         }
@@ -434,7 +434,7 @@ public class HeapPage implements Page {
         return index;
     }
 
-    private int findEmptyPageStarting(int index) {
+    private int findEmptySlotStarting(int index) {
         while (index < numSlots) {
             if (!isSlotUsed(index)) {
                 return index;
