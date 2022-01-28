@@ -35,7 +35,6 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     private final int numPages;
-    int unallocatedIndex = 0;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -61,7 +60,8 @@ public class BufferPool {
     	BufferPool.pageSize = DEFAULT_PAGE_SIZE;
     }
 
-    private HashMap<PageId, Page> allocated = new HashMap<>();
+    private final HashMap<PageId, Page> allocated = new HashMap<>();
+    private final LinkedList<PageId> pageAccessSeq = new LinkedList<>();
 
     /**
      * Retrieve the specified page with the associated permissions.
@@ -84,17 +84,33 @@ public class BufferPool {
         // lab 1 version
         Page page = allocated.get(pid);
         if (page != null) {
+            // move page to seq front
+            pageAccessSeq.remove(pid);
+            pageAccessSeq.add(pid);
             return page;
         }
+        DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
         // must allocate
-        if (unallocatedIndex < numPages) {
-            ++unallocatedIndex;
-            DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+        if (allocated.size() < numPages) {
             page = dbFile.readPage(pid);
             allocated.put(pid, page);
-        } else {
-            throw new DbException("lab1 naive impl, all pages allocated...");
+            pageAccessSeq.add(pid);
+            return page;
         }
+        //throw new DbException("lab1 naive impl, all pages allocated...");
+        // must evict
+        PageId evictId = pageAccessSeq.poll();  // fetch least recently used element
+        assert evictId != null;
+        // lab2 naive dirty implementation
+        try {
+            flushPage(evictId, tid);
+        } catch (IOException e) {
+            System.err.println("evict dirty page io error");
+        }
+        allocated.remove(evictId);
+        page = dbFile.readPage(pid);
+        allocated.put(pid, page);
+        pageAccessSeq.add(pid);
         return page;
     }
 
@@ -224,18 +240,28 @@ public class BufferPool {
 
     /**
      * Flushes a certain page to disk
-     * @param pid an ID indicating the page to flush
+     * @param evictId an ID indicating the page to flush
+     * @param tid transaction ID of the getPage operation
      */
-    private synchronized  void flushPage(PageId pid) throws IOException {
+    private synchronized void flushPage(PageId evictId, TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        DbFile evictFile = Database.getCatalog().getDatabaseFile(evictId.getTableId());
+        Page evictPage = allocated.get(evictId);
+        if (evictPage.isDirty() == null || !evictPage.isDirty().equals(tid)) {
+            evictFile.writePage(evictPage);
+            evictPage.markDirty(false, tid);
+        }
     }
 
     /** Write all pages of the specified transaction to disk.
      */
-    public synchronized  void flushPages(TransactionId tid) throws IOException {
+    public synchronized void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        for (var pageId : pageAccessSeq) {
+            flushPage(pageId, tid);
+        }
     }
 
     /**
