@@ -89,19 +89,18 @@ public class HeapFile implements DbFile {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        FileInputStream inputStream = null;
         try {
-            inputStream = new FileInputStream(file);
-            inputStream.getChannel().position((long) pid.getPageNumber() * BufferPool.getPageSize());
-            var data = inputStream.readNBytes(BufferPool.getPageSize());
+            RandomAccessFile reader = new RandomAccessFile(file, "r");
+            reader.seek((long) pid.getPageNumber() * BufferPool.getPageSize());
+            byte[] data = new byte[BufferPool.getPageSize()];
+            reader.read(data, 0, BufferPool.getPageSize());
             page.loadHeapData(data);
-            inputStream.close();
+            reader.close();
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
-
         return page;
     }
 
