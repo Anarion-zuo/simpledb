@@ -169,6 +169,7 @@ public class HeapFile implements DbFile {
         // some code goes here
         // not necessary for lab1
         HeapPage page = (HeapPage) fetchAvailablePage(tid);
+        // unneccessary but still set a recordId
         RecordId recordId = new RecordId(page.getId(), 0);
         t.setRecordId(recordId);
         page.insertTuple(t);

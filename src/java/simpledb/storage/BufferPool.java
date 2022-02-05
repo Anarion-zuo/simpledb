@@ -89,15 +89,15 @@ public class BufferPool {
             pageAccessSeq.add(pid);
             return page;
         }
-        DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
         // must allocate
+        DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
         if (allocated.size() < numPages) {
+            // have free space
             page = dbFile.readPage(pid);
             allocated.put(pid, page);
             pageAccessSeq.add(pid);
             return page;
         }
-        //throw new DbException("lab1 naive impl, all pages allocated...");
         // must evict
         PageId evictId = pageAccessSeq.poll();  // fetch least recently used element
         assert evictId != null;
