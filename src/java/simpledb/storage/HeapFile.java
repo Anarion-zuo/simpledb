@@ -253,7 +253,8 @@ public class HeapFile implements DbFile {
              * Or the iterator is not valid, meaning the iteration must end.
              */
             if (!opened) {
-                throw new DbException("HeapFileIterator not yet opened");
+                //throw new DbException("HeapFileIterator not yet opened");
+                return false;
             }
             return tupleIterator.hasNext();
         }
