@@ -2,9 +2,14 @@ package simpledb.optimizer;
 
 import simpledb.execution.Predicate;
 
+import java.util.Arrays;
+
 /** A class to represent a fixed-width histogram over a single integer-based field.
  */
 public class IntHistogram {
+
+    private int[] buckets;
+    private int minVal, maxVal;
 
     /**
      * Create a new IntHistogram.
@@ -24,6 +29,24 @@ public class IntHistogram {
      */
     public IntHistogram(int buckets, int min, int max) {
     	// some code goes here
+        this.buckets = new int[buckets];
+        Arrays.fill(this.buckets, 0);
+
+        // [min, max)
+        // +1 to have correct behavoir when input is max
+        this.maxVal = max + 1;
+        this.minVal = min;
+    }
+
+    private int getBucketIndexByVal(int val) {
+        assert val <= maxVal && val >= minVal;
+        int ret = (val - minVal) * buckets.length / (maxVal - minVal);
+        assert ret <= buckets.length && ret >= 0;
+        return ret;
+    }
+
+    private double valsPerBucket() {
+        return (maxVal - minVal) / (double)buckets.length;
     }
 
     /**
@@ -32,6 +55,54 @@ public class IntHistogram {
      */
     public void addValue(int v) {
     	// some code goes here
+        buckets[getBucketIndexByVal(v)]++;
+    }
+
+    private double estimateEquals(int val) {
+        if (val < minVal || val >= maxVal) {
+            return 0;
+        }
+        int bucketCount = buckets[getBucketIndexByVal(val)];
+        return bucketCount / valsPerBucket();
+    }
+
+    private int getIntervalMin(int index) {
+        return (maxVal - minVal) * index / buckets.length + minVal;
+    }
+
+    // open bracket
+    private int getIntervalMax(int index) {
+        return getIntervalMin(index + 1);
+    }
+
+    private int totalCount() {
+        int ret = 0;
+        for (int i = 0; i < buckets.length; ++i) {
+            ret += buckets[i];
+        }
+        return ret;
+    }
+
+    // [left, right)
+    private double estimateInterval(int left, int right) {
+        if (left >= right || right <= minVal || left >= maxVal) {
+            return 0;
+        }
+        if (left < minVal) {
+            left = minVal;
+        }
+        if (right > maxVal) {
+            right = maxVal;
+        }
+        int leftBucketIndex = getBucketIndexByVal(left);
+        int rightBucketIndex = getBucketIndexByVal(right);
+        int midCount = 0;
+        for (int i = leftBucketIndex + 1; i < rightBucketIndex; ++i) {
+            midCount += buckets[i];
+        }
+        double leftCount = (getIntervalMax(leftBucketIndex) - left) * buckets[leftBucketIndex] / valsPerBucket();
+        double rightCount = (right - getIntervalMin(rightBucketIndex)) * buckets[leftBucketIndex] / valsPerBucket();
+        return leftCount + rightCount + midCount;
     }
 
     /**
@@ -45,9 +116,16 @@ public class IntHistogram {
      * @return Predicted selectivity of this particular operator and value
      */
     public double estimateSelectivity(Predicate.Op op, int v) {
-
     	// some code goes here
-        return -1.0;
+        return switch (op) {
+            case EQUALS -> estimateEquals(v);
+            case GREATER_THAN -> estimateInterval(v, maxVal) - estimateEquals(v);
+            case GREATER_THAN_OR_EQ -> estimateInterval(v, maxVal);
+            case LESS_THAN -> estimateInterval(minVal, v);
+            case LESS_THAN_OR_EQ -> estimateInterval(minVal, v) + estimateEquals(v);
+            case NOT_EQUALS -> totalCount() - estimateEquals(v);
+            default -> -1.0;
+        } / totalCount();
     }
     
     /**
@@ -58,8 +136,7 @@ public class IntHistogram {
      *     join optimization. It may be needed if you want to
      *     implement a more efficient optimization
      * */
-    public double avgSelectivity()
-    {
+    public double avgSelectivity() {
         // some code goes here
         return 1.0;
     }
@@ -69,6 +146,6 @@ public class IntHistogram {
      */
     public String toString() {
         // some code goes here
-        return null;
+        return "min:" + minVal + " max:" + maxVal + " bucket count:" + buckets.length;
     }
 }
