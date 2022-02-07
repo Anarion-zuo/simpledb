@@ -1,12 +1,15 @@
 package simpledb.optimizer;
 
 import simpledb.execution.Predicate;
+import simpledb.storage.Field;
+import simpledb.storage.IntField;
+import simpledb.storage.StringField;
 
 /**
  * A class to represent a fixed-width histogram over a single String-based
  * field.
  */
-public class StringHistogram {
+public class StringHistogram implements Histogram {
     final IntHistogram hist;
 
     /**
@@ -90,5 +93,19 @@ public class StringHistogram {
      * */
     public double avgSelectivity() {
         return hist.avgSelectivity();
+    }
+
+    @Override
+    public void addValue(Field field) {
+        assert field instanceof StringField;
+        StringField stringField = (StringField) field;
+        addValue(stringField.getValue());
+    }
+
+    @Override
+    public double estimateSelectivity(Predicate.Op op, Field field) {
+        assert field instanceof StringField;
+        StringField stringField = (StringField) field;
+        return estimateSelectivity(op, stringField.getValue());
     }
 }
