@@ -1,17 +1,18 @@
 package simpledb.optimizer;
 
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Type;
 import simpledb.execution.Predicate;
-import simpledb.execution.SeqScan;
 import simpledb.storage.*;
-import simpledb.transaction.Transaction;
+import simpledb.transaction.TransactionAbortedException;
+import simpledb.transaction.TransactionId;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
+import java.lang.Math;
 
 /**
  * TableStats represents statistics (e.g., histograms) about base tables in a
@@ -68,6 +69,11 @@ public class TableStats {
      */
     static final int NUM_HIST_BINS = 100;
 
+    private final Histogram []histograms;
+    private final int ioCostPerPage;
+    private final DbFile dbFile;
+    private final int tupleCount;
+
     /**
      * Create a new TableStats object, that keeps track of statistics on each
      * column of a table
@@ -87,6 +93,110 @@ public class TableStats {
         // necessarily have to (for example) do everything
         // in a single scan of the table.
         // some code goes here
+        this.ioCostPerPage = ioCostPerPage;
+        this.dbFile = Database.getCatalog().getDatabaseFile(tableid);
+        var it = dbFile.iterator(new TransactionId());
+        try {
+            it.open();
+        } catch (DbException e) {
+            e.printStackTrace();
+        } catch (TransactionAbortedException e) {
+            e.printStackTrace();
+        }
+        TupleDesc desc = dbFile.getTupleDesc();
+        // find min max
+        Field[][] minmax = findMinMaxOnAllFields(it, desc);
+        Field[] mins = minmax[0];
+        Field[] maxs = minmax[1];
+        histograms = new Histogram[desc.numFields()];
+        initHistograms(desc, mins, maxs);
+        // add fields to histograms
+        this.tupleCount = addFieldsToHistograms(it);
+        it.close();
+    }
+
+    /**
+     * Called only by constructor
+     */
+    private Field[][] findMinMaxOnAllFields(DbFileIterator iterator, TupleDesc desc) {
+        Tuple first = null;
+        try {
+            iterator.rewind();
+            first = iterator.next();
+        } catch (DbException e) {
+            e.printStackTrace();
+        } catch (TransactionAbortedException e) {
+            e.printStackTrace();
+        }
+        assert first != null;
+        // TODO ignores cases where the file is empty
+        Field[] minFields = new Field[desc.numFields()];
+        Field[] maxFields = new Field[desc.numFields()];
+        for (int i = 0; i < desc.numFields(); ++i) {
+            minFields[i] = first.getField(i);
+            maxFields[i] = first.getField(i);
+        }
+        try {
+            while (iterator.hasNext()) {
+                Tuple tuple = iterator.next();
+                for (int i = 0; i < desc.numFields(); ++i) {
+                    Field field = tuple.getField(i);
+                    if (field.compare(Predicate.Op.LESS_THAN, minFields[i])) {
+                        minFields[i] = field;
+                    }
+                    if (field.compare(Predicate.Op.GREATER_THAN, maxFields[i])) {
+                        maxFields[i] = field;
+                    }
+                }
+            }
+        } catch (DbException e) {
+            e.printStackTrace();
+        } catch (TransactionAbortedException e) {
+            e.printStackTrace();
+        }
+        return new Field[][] {minFields, maxFields};
+    }
+
+    /**
+     * Called only by constructor
+     */
+    private void initHistograms(TupleDesc desc, Field[] mins, Field[] maxs) {
+        for (int i = 0; i < histograms.length; ++i) {
+            Type type = desc.getFieldType(i);
+            if (type.equals(Type.INT_TYPE)) {
+                histograms[i] = new IntHistogram(NUM_HIST_BINS, ((IntField)mins[i]).getValue(), ((IntField)maxs[i]).getValue());
+            } else if (type.equals(Type.STRING_TYPE)) {
+                // TODO better string histogram
+                histograms[i] = new StringHistogram(NUM_HIST_BINS);
+            } else {
+                System.err.println("unknown type encountered when building histograms");
+                System.exit(1);
+            }
+        }
+    }
+
+    /**
+     * Called only by constructor
+     * @return tuple count
+     */
+    private int addFieldsToHistograms(DbFileIterator iterator) {
+        int tupCount = 0;
+        try {
+            iterator.rewind();
+            while (iterator.hasNext()) {
+                Tuple tuple = iterator.next();
+                assert histograms.length == tuple.getTupleDesc().numFields();
+                tupCount++;
+                for (int i = 0; i < histograms.length; ++i) {
+                    histograms[i].addValue(tuple.getField(i));
+                }
+            }
+        } catch (DbException e) {
+            e.printStackTrace();
+        } catch (TransactionAbortedException e) {
+            e.printStackTrace();
+        }
+        return tupCount;
     }
 
     /**
@@ -103,7 +213,9 @@ public class TableStats {
      */
     public double estimateScanCost() {
         // some code goes here
-        return 0;
+        // TODO only heap file for now
+        assert dbFile instanceof HeapFile;
+        return ioCostPerPage * ((HeapFile)dbFile).numPages();
     }
 
     /**
@@ -117,7 +229,9 @@ public class TableStats {
      */
     public int estimateTableCardinality(double selectivityFactor) {
         // some code goes here
-        return 0;
+        assert dbFile instanceof HeapFile;
+        HeapFile heapFile = (HeapFile) dbFile;
+        return (int)Math.ceil(tupleCount * selectivityFactor);
     }
 
     /**
@@ -150,7 +264,11 @@ public class TableStats {
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
         // some code goes here
-        return 1.0;
+
+        // should return possible #pages
+        assert dbFile instanceof HeapFile;
+        HeapFile heapFile = (HeapFile) dbFile;
+        return histograms[field].estimateSelectivity(op, constant);
     }
 
     /**
@@ -158,7 +276,7 @@ public class TableStats {
      * */
     public int totalTuples() {
         // some code goes here
-        return 0;
+        return tupleCount;
     }
 
 }
