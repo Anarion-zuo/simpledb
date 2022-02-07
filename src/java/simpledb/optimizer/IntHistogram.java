@@ -1,12 +1,14 @@
 package simpledb.optimizer;
 
 import simpledb.execution.Predicate;
+import simpledb.storage.Field;
+import simpledb.storage.IntField;
 
 import java.util.Arrays;
 
 /** A class to represent a fixed-width histogram over a single integer-based field.
  */
-public class IntHistogram {
+public class IntHistogram implements Histogram {
 
     private int[] buckets;
     private int minVal, maxVal;
@@ -29,6 +31,13 @@ public class IntHistogram {
      */
     public IntHistogram(int buckets, int min, int max) {
     	// some code goes here
+        /**
+         * We must check whether the input range has more numbers than #buckets.
+         * Or one bucket contains less than one number.
+         */
+        if (max - min + 1 < buckets) {
+            buckets = max - min + 1;
+        }
         this.buckets = new int[buckets];
         Arrays.fill(this.buckets, 0);
 
@@ -66,19 +75,19 @@ public class IntHistogram {
         return bucketCount / valsPerBucket();
     }
 
-    private int getIntervalMin(int index) {
+    public int getIntervalMin(int index) {
         return (maxVal - minVal) * index / buckets.length + minVal;
     }
 
     // open bracket
-    private int getIntervalMax(int index) {
+    public int getIntervalMax(int index) {
         return getIntervalMin(index + 1);
     }
 
     private int totalCount() {
         int ret = 0;
-        for (int i = 0; i < buckets.length; ++i) {
-            ret += buckets[i];
+        for (int bucket : buckets) {
+            ret += bucket;
         }
         return ret;
     }
@@ -146,6 +155,30 @@ public class IntHistogram {
      */
     public String toString() {
         // some code goes here
-        return "min:" + minVal + " max:" + maxVal + " bucket count:" + buckets.length;
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < buckets.length; ++i) {
+            builder.append('[');
+            builder.append(getIntervalMin(i));
+            builder.append(',');
+            builder.append(getIntervalMax(i));
+            builder.append("):");
+            builder.append(buckets[i]);
+            builder.append(' ');
+        }
+        return builder.toString();
+    }
+
+    @Override
+    public void addValue(Field field) {
+        assert field instanceof IntField;
+        IntField intField = (IntField) field;
+        addValue(intField.getValue());
+    }
+
+    @Override
+    public double estimateSelectivity(Predicate.Op op, Field field) {
+        assert field instanceof IntField;
+        IntField intField = (IntField) field;
+        return estimateSelectivity(op, intField.getValue());
     }
 }
