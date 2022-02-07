@@ -6,6 +6,8 @@ import org.junit.Assert;
 import simpledb.execution.Predicate.Op;
 import simpledb.optimizer.IntHistogram;
 
+import java.util.Random;
+
 public class IntHistogramTest {
 
 	/**
@@ -74,7 +76,7 @@ public class IntHistogramTest {
 		
 		// This really should return "1.0"; but,
 		// be conservative in case of alternate implementations
-		Assert.assertTrue(h.estimateSelectivity(Op.EQUALS, 3) > 0.8);
+		Assert.assertTrue(h.estimateSelectivity(Op.EQUALS, 3) > 0.999);
 		Assert.assertTrue(h.estimateSelectivity(Op.EQUALS, 8) < 0.001);
 	}
 	
@@ -96,6 +98,10 @@ public class IntHistogramTest {
 		Assert.assertTrue(h.estimateSelectivity(Op.GREATER_THAN, 2) > 0.6);
 		Assert.assertTrue(h.estimateSelectivity(Op.GREATER_THAN, 4) < 0.4);
 		Assert.assertTrue(h.estimateSelectivity(Op.GREATER_THAN, 12) < 0.001);
+		Assert.assertEquals(0.8, h.estimateSelectivity(Op.GREATER_THAN, 2), 1e-2);
+		Assert.assertEquals(0.2, h.estimateSelectivity(Op.GREATER_THAN, 3), 1e-2);
+		Assert.assertEquals(0.2, h.estimateSelectivity(Op.GREATER_THAN, 4),1e-2 );
+		Assert.assertEquals(0, h.estimateSelectivity(Op.GREATER_THAN, 12), 1e-2);
 	}
 	
 	/**
@@ -134,9 +140,13 @@ public class IntHistogramTest {
 		// Be conservative in case of alternate implementations
 		Assert.assertTrue(h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, -1) > 0.999);
 		Assert.assertTrue(h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, 2) > 0.6);
+		Assert.assertEquals(0.8, h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, 2), 1e-2);
 		Assert.assertTrue(h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, 3) > 0.45);
+		Assert.assertEquals(0.8, h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, 3), 1e-2);
 		Assert.assertTrue(h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, 4) < 0.5);
+		Assert.assertEquals(0.2, h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, 4),1e-2 );
 		Assert.assertTrue(h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, 12) < 0.001);
+		Assert.assertEquals(0, h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, 12), 1e-2);
 	}
 	
 	/**
@@ -174,5 +184,91 @@ public class IntHistogramTest {
 		// Be conservative in case of alternate implementations
 		Assert.assertTrue(h.estimateSelectivity(Op.NOT_EQUALS, 3) < 0.001);
 		Assert.assertTrue(h.estimateSelectivity(Op.NOT_EQUALS, 8) > 0.01);
+	}
+
+	@Test public void all1Test() {
+		IntHistogram h = new IntHistogram(100, 1, 100);
+		for (int i = 1; i <= 100; ++i) {
+			h.addValue(i);
+		}
+		Assert.assertEquals(0.01, h.estimateSelectivity(Op.EQUALS, 4), 1e-4);
+		Assert.assertEquals(1, h.estimateSelectivity(Op.LESS_THAN, 101), 1e-4);
+		Assert.assertEquals(0.49, h.estimateSelectivity(Op.LESS_THAN, 50), 1e-4);
+		Assert.assertEquals(0, h.estimateSelectivity(Op.LESS_THAN, 1), 1e-4);
+		Assert.assertEquals(0.01, h.estimateSelectivity(Op.LESS_THAN, 2), 1e-4);
+		// indivisible
+		IntHistogram h1 = new IntHistogram(101, 1, 102);
+		for (int i = 1; i <= 102; ++i) {
+			h1.addValue(i);
+		}
+		Assert.assertEquals(0.01, h1.estimateSelectivity(Op.EQUALS, 4), 1e-4);
+		Assert.assertEquals(1, h1.estimateSelectivity(Op.LESS_THAN, 102), 1e-4);
+		Assert.assertEquals(0.49, h1.estimateSelectivity(Op.LESS_THAN, 51), 1e-4);
+		Assert.assertEquals(0, h1.estimateSelectivity(Op.LESS_THAN, 1), 1e-4);
+		Assert.assertEquals(0.01, h1.estimateSelectivity(Op.LESS_THAN, 2), 1e-4);
+	}
+
+	// check internal helper function
+	@Test public void intervalTest() {
+		// simplest case
+		IntHistogram h = new IntHistogram(10, 1, 100);
+		for (int i = 0; i < 10; ++i) {
+			Assert.assertEquals(i * 10 + 1, h.getIntervalMin(i));
+			Assert.assertEquals((i + 1) * 10 + 1, h.getIntervalMax(i));
+		}
+		// each bucket contains one number
+		IntHistogram h1 = new IntHistogram(17, 0, 16);
+		for (int i = 0; i < 17; ++i) {
+			Assert.assertEquals(i, h1.getIntervalMin(i));
+			Assert.assertEquals(i + 1, h1.getIntervalMax(i));
+		}
+		// not integer
+		IntHistogram h2 = new IntHistogram(17, 0, 19);
+		for (int i = 0; i < 17; ++i) {
+			Assert.assertEquals(i, h2.getIntervalMin(i));
+			Assert.assertEquals(i + 1, h2.getIntervalMax(i));
+		}
+	}
+
+	// lots of input
+	@Test public void largeTest() {
+		final int maxVal = 43;
+		final int count = 7512311;
+		IntHistogram h = new IntHistogram(101, 0, maxVal);
+		int cur = 0;
+		for (int i = 0; i < count; ++i) {
+			h.addValue(cur);
+			// cur : [0, maxVal]
+			cur = (cur + 1) % (maxVal + 1);
+		}
+		double delta = 2d / maxVal;
+		for (int i = 0; i < count; ++i) {
+			double frac = Math.random();
+			Assert.assertEquals(frac, h.estimateSelectivity(Op.LESS_THAN, (int)(maxVal * frac)), delta);
+		}
+	}
+
+	/**
+	 * Mimics the test in TableStatsTest
+	 */
+	@Test public void randomTest() {
+		int maxVal = 32;
+		int count = 10200;
+		IntHistogram h = new IntHistogram(100, 0, maxVal);
+		Random ran = new Random();
+		for (int i = 0; i < count; ++i) {
+			int val = ran.nextInt(maxVal + 1);
+			h.addValue(val);
+		}
+		double delta = 2d / maxVal;
+		for (int i = 0; i < count; ++i) {
+			double frac = Math.random();
+			Assert.assertEquals(frac, h.estimateSelectivity(Op.LESS_THAN_OR_EQ, (int)(maxVal * frac)), delta);
+		}
+		Assert.assertEquals(1 / (double)maxVal, h.estimateSelectivity(Op.EQUALS, maxVal / 2), delta);
+		Assert.assertEquals(0.5, h.estimateSelectivity(Op.LESS_THAN, maxVal / 2), delta);
+		Assert.assertEquals(0.5, h.estimateSelectivity(Op.LESS_THAN_OR_EQ, maxVal / 2), delta);
+		Assert.assertEquals(0.5, h.estimateSelectivity(Op.GREATER_THAN, maxVal / 2), delta);
+		Assert.assertEquals(0.5, h.estimateSelectivity(Op.GREATER_THAN_OR_EQ, maxVal / 2), delta);
 	}
 }
