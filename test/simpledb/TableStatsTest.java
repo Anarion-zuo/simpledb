@@ -114,6 +114,11 @@ public class TableStatsTest extends SimpleDbTestBase {
 	 * Don't bother splitting this into N different functions for
 	 * each possible Op because we will probably catch any bugs here in
 	 * IntHistogramTest, so we hopefully don't need all the JUnit checkboxes.
+	 *
+	 * Random generator is not as random as this test assumes.
+	 * Because of this, we must check whether the input range
+	 * has more numbers than #buckets.
+	 * Or one bucket contains less than one number.
 	 */
 	@Test public void estimateSelectivityTest() {
 		final int maxCellVal = 32;	// Tuple values are randomized between 0 and this number
