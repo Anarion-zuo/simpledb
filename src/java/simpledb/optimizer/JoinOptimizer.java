@@ -130,7 +130,9 @@ public class JoinOptimizer {
             // HINT: You may need to use the variable "j" if you implemented
             // a join algorithm that's more complicated than a basic
             // nested-loops join.
-            return -1.0;
+            // joincost(t1 join t2) = scancost(t1) + ntups(t1) x scancost(t2) //IO cost
+            //                       + ntups(t1) x ntups(t2)  //CPU cost
+            return cost1 + card1 * cost2 + card1 * card2;
         }
     }
 
@@ -166,6 +168,24 @@ public class JoinOptimizer {
         }
     }
 
+    private static int estimateTableEqualJoinCardinality(int card1, int card2, boolean t1pkey, boolean t2pkey) {
+        if (t1pkey) {
+            if (t2pkey) {
+                return 1;
+            }
+            return card2;
+        }
+        if (t2pkey) {
+            return card1;
+        }
+        // It's fine to make up a simple heuristic (say, the size of the larger of the two tables).
+        return Math.max(card1, card2);
+    }
+
+    private static int estimateTableOtherJoinCardinality(int card1, int card2) {
+        return card1 * card2;
+    }
+
     /**
      * Estimate the join cardinality of two tables.
      * */
@@ -174,9 +194,11 @@ public class JoinOptimizer {
                                                    String field2PureName, int card1, int card2, boolean t1pkey,
                                                    boolean t2pkey, Map<String, TableStats> stats,
                                                    Map<String, Integer> tableAliasToId) {
-        int card = 1;
         // some code goes here
-        return card <= 0 ? 1 : card;
+        return switch (joinOp) {
+            case EQUALS -> estimateTableEqualJoinCardinality(card1, card2, t1pkey, t2pkey);
+            default -> estimateTableOtherJoinCardinality(card1, card2);
+        };
     }
 
     /**
@@ -235,10 +257,39 @@ public class JoinOptimizer {
             Map<String, TableStats> stats,
             Map<String, Double> filterSelectivities, boolean explain)
             throws ParsingException {
-
         // some code goes here
-        //Replace the following
-        return joins;
+        PlanCache pc = new PlanCache();
+        Set<LogicalJoinNode> j = null;
+        // j is joins
+        for (int i = 1; i <= joins.size(); ++i) {
+            var subsets = enumerateSubsets(joins, i);
+            // for s in {all length i subsets of j}
+            for (var s : subsets) {
+                if (i == joins.size()) {
+                    j = s;
+                }
+                double bestCostSoFar = Double.MAX_VALUE;
+                CostCard bestPlanSoFar = null;
+                // for s' in {all length d-1 subsets of s}
+                for (var joinToRemove : s) {
+                    CostCard costCard = computeCostAndCardOfSubplan(stats, filterSelectivities, joinToRemove, s, bestCostSoFar, pc);
+                    if (costCard != null && bestCostSoFar > costCard.cost) {
+                        bestCostSoFar = costCard.cost;
+                        bestPlanSoFar = costCard;
+                    }
+                }
+                //assert bestPlanSoFar != null;
+                if (bestPlanSoFar != null) {
+                    pc.addPlan(s, bestPlanSoFar.cost, bestPlanSoFar.card, bestPlanSoFar.plan);
+                }
+            }
+        }
+        assert j != null;
+        var ret = pc.getOrder(j);
+        if (explain) {
+            printJoins(ret, pc, stats, filterSelectivities);
+        }
+        return ret;
     }
 
     // ===================== Private Methods =================================
