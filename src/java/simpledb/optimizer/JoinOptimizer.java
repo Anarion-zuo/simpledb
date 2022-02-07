@@ -416,7 +416,9 @@ public class JoinOptimizer {
     private boolean isPkey(String tableAlias, String field) {
         int tid1 = p.getTableId(tableAlias);
         String pkey1 = Database.getCatalog().getPrimaryKey(tid1);
-
+        if (pkey1 == null) {
+            return false;
+        }
         return pkey1.equals(field);
     }
 
