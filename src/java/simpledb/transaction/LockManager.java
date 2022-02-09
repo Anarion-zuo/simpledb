@@ -1,0 +1,248 @@
+package simpledb.transaction;
+
+import simpledb.common.DbException;
+import simpledb.storage.PageId;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.concurrent.locks.*;
+
+public class LockManager {
+
+    private static class LockItem {
+
+        private final Condition cond;
+        private final Lock lock;
+        /**
+         * Documents all running reading transactions.
+         * Appending reading transactions are not documented.
+         */
+        private final HashSet<TransactionId> sharedTransactions = new HashSet<>();
+        /**
+         * Documents the transaction waiting for or currently is writing.
+         * If there are reading transactions running,
+         *      a writing one must wait for them to release the lock.
+         * If there is a writing transaction waiting or running,
+         *      all new reading or writing transactions must wait for it to release the lock.
+         */
+        private TransactionId exclusiveTransaction = null;
+
+        public LockItem() {
+            lock = new ReentrantLock();
+            cond = lock.newCondition();
+        }
+
+        public void sharedLock(TransactionId transactionId) {
+            assert transactionId != null;
+            lock.lock();
+            try {
+                // can use an exclusive lock as a shared lock
+                if (transactionId.equals(exclusiveTransaction)) {
+
+                } else {
+                    if (sharedTransactions.contains(transactionId)) {
+                        /**
+                         * If a shared lock is already attained by the transaction,
+                         * do nothing new.
+                         */
+                    } else {
+                        /**
+                         * Must wait for the following:
+                         * - writing transaction to release the lock.
+                         * - appending writing transaction to run and release the lock.
+                         * When an exclusive transaction is pending or running,
+                         * new shared transactions hangs here.
+                         */
+                        while (exclusiveTransaction != null) {
+                            cond.await();
+                        }
+                        sharedTransactions.add(transactionId);
+                    }
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public void releaseShared(TransactionId transactionId) throws DbException {
+            assert transactionId != null;
+            lock.lock();
+            if (!sharedTransactions.contains(transactionId)) {
+                lock.unlock();
+                throw new DbException("releasing shared lock without aquiring");
+            }
+            sharedTransactions.remove(transactionId);
+            if (sharedTransactions.isEmpty()) {
+                cond.signalAll();
+            }
+            lock.unlock();
+        }
+
+        public void exclusiveLock(TransactionId transactionId) {
+            assert transactionId != null;
+            lock.lock();
+            try {
+                /**
+                 * First, must ensure exclusive Transaction be given to this transactionId.
+                 * Must wait for the preceding one to release.
+                 */
+                while (!transactionId.equals(exclusiveTransaction)) {
+                    while (exclusiveTransaction != null) {
+                        cond.await();
+                    }
+                    exclusiveTransaction = transactionId;
+                }
+                /**
+                 * Then, check whether this is an upgrade.
+                 */
+                if (sharedTransactions.contains(transactionId)) {
+                    sharedTransactions.remove(transactionId);
+                } else {
+                    /**
+                     * Then, must wait for all shared locks to be released.
+                     */
+                    while (!sharedTransactions.isEmpty()) {
+                        cond.await();
+                    }
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public void releaseExclusive(TransactionId transactionId) throws DbException {
+            assert transactionId != null;
+            lock.lock();
+            if (exclusiveTransaction == null || !exclusiveTransaction.equals(transactionId)) {
+                lock.unlock();
+                throw new DbException("releasing exclusive lock without aquiring");
+            }
+            exclusiveTransaction = null;
+            cond.signalAll();
+            lock.unlock();
+        }
+
+        public boolean isSharedLocked(TransactionId transactionId) {
+            lock.lock();
+            boolean ret = sharedTransactions.contains(transactionId);
+            lock.unlock();
+            return ret;
+        }
+
+        public boolean isExclusiveLocked(TransactionId transactionId) {
+            lock.lock();
+            boolean ret = transactionId.equals(exclusiveTransaction);
+            lock.unlock();
+            return ret;
+        }
+
+        public boolean isLocked(TransactionId transactionId) {
+            lock.lock();
+            boolean ret = sharedTransactions.contains(transactionId) || transactionId.equals(exclusiveTransaction);
+            lock.unlock();
+            return ret;
+        }
+
+        /**
+         * Release whatever lock the thread attained.
+         */
+        public void tryReleaseLock(TransactionId transactionId) {
+            lock.lock();
+            if (sharedTransactions.contains(transactionId)) {
+                // must be shared locked
+                sharedTransactions.remove(transactionId);
+                if (sharedTransactions.isEmpty()) {
+                    cond.signalAll();
+                }
+            } else if (transactionId.equals(exclusiveTransaction)) {
+                exclusiveTransaction = null;
+                cond.signalAll();
+            }
+            lock.unlock();
+        }
+    }
+
+    private final HashMap<PageId, LockItem> lockMap = new HashMap<>();
+    private final Lock mapLock = new ReentrantLock();
+
+    public LockManager() {
+
+    }
+
+    public void aquireSharedLock(TransactionId transactionId, PageId pageId) {
+        mapLock.lock();
+        LockItem lockItem = lockMap.get(pageId);
+        if (lockItem == null) {
+            lockItem = new LockItem();
+            lockMap.put(pageId, lockItem);
+        }
+        mapLock.unlock();
+        lockItem.sharedLock(transactionId);
+    }
+
+    public void aquireExclusiveLock(TransactionId transactionId, PageId pageId) {
+        mapLock.lock();
+        LockItem lockItem = lockMap.get(pageId);
+        if (lockItem == null) {
+            lockItem = new LockItem();
+            lockMap.put(pageId, lockItem);
+        }
+        mapLock.unlock();
+        lockItem.exclusiveLock(transactionId);
+    }
+
+    public void releaseSharedLock(TransactionId transactionId, PageId pageId) throws DbException {
+        mapLock.lock();
+        LockItem lockItem = lockMap.get(pageId);
+        if (lockItem == null) {
+            mapLock.unlock();
+            throw new DbException("releasing shared lock without aquiring");
+        }
+        mapLock.unlock();
+        lockItem.releaseShared(transactionId);
+    }
+
+    public void releaseExclusiveLock(TransactionId transactionId, PageId pageId) throws DbException {
+        mapLock.lock();
+        LockItem lockItem = lockMap.get(pageId);
+        if (lockItem == null) {
+            mapLock.unlock();
+            throw new DbException("releasing exclusive lock without aquiring");
+        }
+        mapLock.unlock();
+        lockItem.releaseExclusive(transactionId);
+    }
+
+    public boolean isLocked(TransactionId transactionId, PageId pageId) {
+        mapLock.lock();
+        LockItem lockItem = lockMap.get(pageId);
+        mapLock.unlock();
+        if (lockItem == null) {
+            return false;
+        }
+        return lockItem.isLocked(transactionId);
+    }
+
+    public void tryReleaseLock(TransactionId transactionId, PageId pageId) throws DbException {
+        mapLock.lock();
+        LockItem lockItem = lockMap.get(pageId);
+        if (lockItem == null) {
+            mapLock.unlock();
+            throw new DbException("releasing exclusive lock without aquiring");
+        }
+        mapLock.unlock();
+        lockItem.tryReleaseLock(transactionId);
+    }
+
+    public void releaseAllLocks(TransactionId transactionId, PageId pageId) {
+        mapLock.lock();
+        for (var lockItem : lockMap.values()) {
+            lockItem.tryReleaseLock(transactionId);
+        }
+        mapLock.unlock();
+    }
+}
