@@ -8,6 +8,8 @@ import simpledb.transaction.TransactionId;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * HeapFile is an implementation of a DbFile that stores a collection of tuples
@@ -104,6 +106,8 @@ public class HeapFile implements DbFile {
         return page;
     }
 
+    private final Lock writePageLock = new ReentrantLock();
+
     // see DbFile.java for javadocs
     public void writePage(Page page) throws IOException {
         // some code goes here
@@ -120,7 +124,9 @@ public class HeapFile implements DbFile {
         // for no particular reason
         RandomAccessFile writer = new RandomAccessFile(file, "rw");
         writer.seek((long) BufferPool.getPageSize() * page.getId().getPageNumber());
+        writePageLock.lock();
         writer.write(page.getPageData());
+        writePageLock.unlock();
         writer.close();
     }
 
@@ -135,14 +141,16 @@ public class HeapFile implements DbFile {
     /**
      * If there is no page available with an empty slot, it must allocate.
      * By allocating, this function writes null data to the offset of the page on disk.
+     * Must aquire exclusive lock. This method is for writing operations
      * @return The first page's index with an empty slot.
      */
     private Page fetchAvailablePage(TransactionId tid) throws IOException, TransactionAbortedException, DbException {
         // find available if possible
         for (int i = 0; i < numPages(); ++i) {
             PageId pid = new HeapPageId(getId(), i);
-            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
+            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_ONLY);
             if (page.getNumEmptySlots() != 0) {
+                Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
                 return page;
             }
         }
@@ -213,7 +221,7 @@ public class HeapFile implements DbFile {
          */
         private void moveToNext() throws TransactionAbortedException, DbException {
             while (curIndex.getPageNumber() < numPages()) {
-                HeapPage page = (HeapPage) Database.getBufferPool().getPage(transactionId, curIndex, Permissions.READ_WRITE);
+                HeapPage page = (HeapPage) Database.getBufferPool().getPage(transactionId, curIndex, Permissions.READ_ONLY);
                 tupleIterator = page.iterator();
                 if (tupleIterator.hasNext()) {
                     return;
