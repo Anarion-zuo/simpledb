@@ -4,6 +4,7 @@ import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.common.DbException;
 import simpledb.common.DeadlockException;
+import simpledb.transaction.LockManager;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
@@ -35,6 +36,7 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     private final int numPages;
+    private final LockManager lockManager = new LockManager();
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -82,6 +84,20 @@ public class BufferPool {
             throws TransactionAbortedException, DbException {
         // some code goes here
         // lab 1 version
+        if (perm.equals(Permissions.READ_ONLY)) {
+            lockManager.aquireSharedLock(tid, pid);
+        } else if (perm.equals(Permissions.READ_WRITE)) {
+            lockManager.aquireExclusiveLock(tid, pid);
+        } else {
+            throw new DbException("unknown permission");
+        }
+        // no locks needed here
+        // neccessary locks already attained
+        return getAvailablePage(tid, pid);
+    }
+
+    private Page getAvailablePage(TransactionId tid, PageId pid) {
+        // lab 1 version
         Page page = allocated.get(pid);
         if (page != null) {
             // move page to seq front
@@ -91,23 +107,19 @@ public class BufferPool {
         }
         // must allocate
         DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
-        if (allocated.size() < numPages) {
-            // have free space
-            page = dbFile.readPage(pid);
-            allocated.put(pid, page);
-            pageAccessSeq.add(pid);
-            return page;
+        assert allocated.size() <= numPages;
+        if (allocated.size() == numPages) {
+            // must evict
+            try {
+                evictPage(tid, decideEvict());
+            } catch (DbException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            // now allocated set is one page less than before
         }
-        // must evict
-        PageId evictId = pageAccessSeq.poll();  // fetch least recently used element
-        assert evictId != null;
-        // lab2 naive dirty implementation
-        try {
-            flushPage(evictId, tid);
-        } catch (IOException e) {
-            System.err.println("evict dirty page io error");
-        }
-        allocated.remove(evictId);
+
         page = dbFile.readPage(pid);
         allocated.put(pid, page);
         pageAccessSeq.add(pid);
@@ -264,13 +276,21 @@ public class BufferPool {
         }
     }
 
+    private PageId decideEvict() {
+        return pageAccessSeq.poll();  // fetch least recently used element
+    }
+
     /**
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
-    private synchronized  void evictPage() throws DbException {
+    private synchronized void evictPage(TransactionId tid, PageId evictId) throws DbException, IOException {
         // some code goes here
         // not necessary for lab1
+        assert evictId != null;
+        // lab2 naive dirty implementation
+        flushPage(evictId, tid);
+        allocated.remove(evictId);
     }
 
 }
