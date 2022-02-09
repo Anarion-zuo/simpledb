@@ -135,9 +135,14 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      * @param pid the ID of the page to unlock
      */
-    public  void unsafeReleasePage(TransactionId tid, PageId pid) {
+    public void unsafeReleasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
+        try {
+            lockManager.tryReleaseLock(tid, pid);
+        } catch (DbException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -154,7 +159,7 @@ public class BufferPool {
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return false;
+        return lockManager.isLocked(tid, p);
     }
 
     /**
