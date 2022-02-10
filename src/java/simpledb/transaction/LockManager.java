@@ -3,13 +3,12 @@ package simpledb.transaction;
 import simpledb.common.DbException;
 import simpledb.storage.PageId;
 
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.*;
 import java.util.concurrent.locks.*;
 
 public class LockManager {
 
-    private static class LockItem {
+    private class LockItem {
 
         private final Condition cond;
         private final Lock lock;
@@ -32,7 +31,13 @@ public class LockManager {
             cond = lock.newCondition();
         }
 
-        public void sharedLock(TransactionId transactionId) {
+        private void throwIfDeadLocked(TransactionId source) throws TransactionAbortedException {
+            if (getWaitNodeByTransactionId(source).checkCycleFromThis()) {
+                throw new TransactionAbortedException();
+            }
+        }
+
+        public void sharedLock(TransactionId transactionId) throws TransactionAbortedException {
             assert transactionId != null;
             lock.lock();
             try {
@@ -54,6 +59,8 @@ public class LockManager {
                          * new shared transactions hangs here.
                          */
                         while (exclusiveTransaction != null) {
+                            getWaitNodeByTransactionId(transactionId).addWait(exclusiveTransaction);
+                            throwIfDeadLocked(exclusiveTransaction);
                             cond.await();
                         }
                         sharedTransactions.add(transactionId);
@@ -74,13 +81,14 @@ public class LockManager {
                 throw new DbException("releasing shared lock without aquiring");
             }
             sharedTransactions.remove(transactionId);
+            getWaitNodeByTransactionId(transactionId).releaseThis();
             if (sharedTransactions.isEmpty()) {
                 cond.signalAll();
             }
             lock.unlock();
         }
 
-        public void exclusiveLock(TransactionId transactionId) {
+        public void exclusiveLock(TransactionId transactionId) throws TransactionAbortedException {
             assert transactionId != null;
             lock.lock();
             try {
@@ -90,6 +98,8 @@ public class LockManager {
                  */
                 while (!transactionId.equals(exclusiveTransaction)) {
                     while (exclusiveTransaction != null) {
+                        getWaitNodeByTransactionId(transactionId).addWait(exclusiveTransaction);
+                        throwIfDeadLocked(exclusiveTransaction);
                         cond.await();
                     }
                     exclusiveTransaction = transactionId;
@@ -103,6 +113,8 @@ public class LockManager {
                  * Then, must wait for all shared locks to be released.
                  */
                 while (!sharedTransactions.isEmpty()) {
+                    getWaitNodeByTransactionId(transactionId).addWait(sharedTransactions);
+                    throwIfDeadLocked(exclusiveTransaction);
                     cond.await();
                 }
             } catch (InterruptedException e) {
@@ -119,6 +131,7 @@ public class LockManager {
                 lock.unlock();
                 throw new DbException("releasing exclusive lock without aquiring");
             }
+            getWaitNodeByTransactionId(transactionId).releaseThis();
             exclusiveTransaction = null;
             cond.signalAll();
             lock.unlock();
@@ -153,10 +166,12 @@ public class LockManager {
             if (sharedTransactions.contains(transactionId)) {
                 // must be shared locked
                 sharedTransactions.remove(transactionId);
+                getWaitNodeByTransactionId(transactionId).releaseThis();
                 if (sharedTransactions.isEmpty()) {
                     cond.signalAll();
                 }
             } else if (transactionId.equals(exclusiveTransaction)) {
+                getWaitNodeByTransactionId(transactionId).releaseThis();
                 exclusiveTransaction = null;
                 cond.signalAll();
             }
@@ -171,7 +186,7 @@ public class LockManager {
 
     }
 
-    public void aquireSharedLock(TransactionId transactionId, PageId pageId) {
+    public void aquireSharedLock(TransactionId transactionId, PageId pageId) throws TransactionAbortedException {
         mapLock.lock();
         LockItem lockItem = lockMap.get(pageId);
         if (lockItem == null) {
@@ -182,7 +197,7 @@ public class LockManager {
         lockItem.sharedLock(transactionId);
     }
 
-    public void aquireExclusiveLock(TransactionId transactionId, PageId pageId) {
+    public void aquireExclusiveLock(TransactionId transactionId, PageId pageId) throws TransactionAbortedException {
         mapLock.lock();
         LockItem lockItem = lockMap.get(pageId);
         if (lockItem == null) {
