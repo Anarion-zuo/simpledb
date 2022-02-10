@@ -79,6 +79,15 @@ public class HeapFile implements DbFile {
         return tupleDesc;
     }
 
+    public byte[] readPageData(PageId pid) throws IOException {
+        RandomAccessFile reader = new RandomAccessFile(file, "r");
+        reader.seek((long) pid.getPageNumber() * BufferPool.getPageSize());
+        byte[] data = new byte[BufferPool.getPageSize()];
+        reader.read(data, 0, BufferPool.getPageSize());
+        reader.close();
+        return data;
+    }
+
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
         // some code goes here
@@ -92,12 +101,7 @@ public class HeapFile implements DbFile {
             e.printStackTrace();
         }
         try {
-            RandomAccessFile reader = new RandomAccessFile(file, "r");
-            reader.seek((long) pid.getPageNumber() * BufferPool.getPageSize());
-            byte[] data = new byte[BufferPool.getPageSize()];
-            reader.read(data, 0, BufferPool.getPageSize());
-            page.loadHeapData(data);
-            reader.close();
+            page.loadHeapData(readPageData(pid));
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
