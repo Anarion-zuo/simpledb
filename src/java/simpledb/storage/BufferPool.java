@@ -153,6 +153,7 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) {
         // some code goes here
         // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
@@ -160,6 +161,30 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1|lab2
         return lockManager.isLocked(tid, p);
+    }
+
+    private void abortDirtyPage(TransactionId tid, PageId pageId) {
+        Page page = allocated.get(pageId);
+        TransactionId dirtyId = page.isDirty();
+        if (tid.equals(dirtyId)) {
+            //allocated.remove(pageId);
+            // should keep the in-memory version updated
+            // heap page version
+            assert page instanceof HeapPage;
+            HeapPage heapPage = (HeapPage) page;
+            HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(pageId.getTableId());
+            try {
+                heapPage.loadHeapData(heapFile.readPageData(pageId));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void abortPages(TransactionId tid) {
+        for (var pageId : evictableSeq) {
+            abortDirtyPage(tid, pageId);
+        }
     }
 
     /**
