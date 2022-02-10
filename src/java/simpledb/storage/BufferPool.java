@@ -306,8 +306,22 @@ public class BufferPool {
         }
     }
 
-    private PageId decideEvict() {
-        return pageAccessSeq.poll();  // fetch least recently used element
+    private PageId decideEvict(TransactionId transactionId) throws DbException {
+        PageId ret = null;
+        // least recently used first
+        // NO STEAL
+        for (PageId pageId : evictableSeq) {
+            Page page = allocated.get(pageId);
+            if (page.isDirty() == null) {
+                ret = pageId;
+                break;
+            }
+        }
+        if (ret == null) {
+            throw new DbException("all pages are dirty, cannot evict...");
+        }
+        evictableSeq.remove(ret);
+        return ret;
     }
 
     /**
