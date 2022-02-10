@@ -7,6 +7,7 @@ import simpledb.storage.HeapPageId;
 import simpledb.storage.PageId;
 import simpledb.transaction.LockManager;
 import simpledb.transaction.Transaction;
+import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 import java.util.ArrayList;
@@ -15,7 +16,7 @@ public class LockManagerTest {
 
     private final LockManager lockManager = new LockManager();
 
-    @Test public void sharedLockTest() {
+    @Test public void sharedLockTest() throws TransactionAbortedException {
         TransactionId tid1 = new TransactionId();
         TransactionId tid2 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
@@ -42,7 +43,7 @@ public class LockManagerTest {
         }
     }
 
-    @Test public void exclusiveLockTest() {
+    @Test public void exclusiveLockTest() throws TransactionAbortedException {
         TransactionId tid1 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         lockManager.aquireExclusiveLock(tid1, pageId);
@@ -69,7 +70,7 @@ public class LockManagerTest {
         }
     }
 
-    @Test public void upgradeLockTest() {
+    @Test public void upgradeLockTest() throws TransactionAbortedException {
         TransactionId tid1 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         lockManager.aquireSharedLock(tid1, pageId);
@@ -99,7 +100,7 @@ public class LockManagerTest {
         }
     }
 
-    @Test public void sharedAfterExclusiveTest() throws DbException {
+    @Test public void sharedAfterExclusiveTest() throws DbException, TransactionAbortedException {
         TransactionId tid1 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         // exclusive lock first
@@ -118,7 +119,7 @@ public class LockManagerTest {
         lockManager.releaseExclusiveLock(tid1, pageId);
     }
 
-    @Test public void exclusiveWaitsForSharedTest() throws InterruptedException {
+    @Test public void exclusiveWaitsForSharedTest() throws InterruptedException, TransactionAbortedException {
         TransactionId tid1 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         lockManager.aquireSharedLock(tid1, pageId);
@@ -129,7 +130,11 @@ public class LockManagerTest {
         Thread thread = new Thread(() -> {
             TransactionId tid2 = new TransactionId();
             // should block
-            lockManager.aquireExclusiveLock(tid2, pageId);
+            try {
+                lockManager.aquireExclusiveLock(tid2, pageId);
+            } catch (TransactionAbortedException e) {
+                e.printStackTrace();
+            }
             if (!ref.flag) {
                 Assert.fail("exclusive lock did not wait for shared lock");
             }
@@ -145,7 +150,7 @@ public class LockManagerTest {
         thread.join();
     }
 
-    @Test public void upgradeWaitsForSharedTest() throws InterruptedException {
+    @Test public void upgradeWaitsForSharedTest() throws InterruptedException, TransactionAbortedException {
         TransactionId tid1 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         lockManager.aquireSharedLock(tid1, pageId);
@@ -156,8 +161,16 @@ public class LockManagerTest {
         Thread thread = new Thread(() -> {
             TransactionId tid2 = new TransactionId();
             // should block
-            lockManager.aquireSharedLock(tid2, pageId);
-            lockManager.aquireExclusiveLock(tid2, pageId);
+            try {
+                lockManager.aquireSharedLock(tid2, pageId);
+            } catch (TransactionAbortedException e) {
+                e.printStackTrace();
+            }
+            try {
+                lockManager.aquireExclusiveLock(tid2, pageId);
+            } catch (TransactionAbortedException e) {
+                e.printStackTrace();
+            }
             if (!ref.flag) {
                 Assert.fail("exclusive lock did not wait for shared lock");
             }
@@ -173,7 +186,7 @@ public class LockManagerTest {
         thread.join();
     }
 
-    @Test public void sharedWaitsForExclusiveTest() throws InterruptedException {
+    @Test public void sharedWaitsForExclusiveTest() throws InterruptedException, TransactionAbortedException {
         TransactionId tid1 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         lockManager.aquireExclusiveLock(tid1, pageId);
@@ -184,7 +197,11 @@ public class LockManagerTest {
         Thread thread = new Thread(() -> {
             TransactionId tid2 = new TransactionId();
             // should block
-            lockManager.aquireSharedLock(tid2, pageId);
+            try {
+                lockManager.aquireSharedLock(tid2, pageId);
+            } catch (TransactionAbortedException e) {
+                e.printStackTrace();
+            }
             if (!ref.flag) {
                 Assert.fail("shared lock did not wait for exclusive lock");
             }
@@ -200,7 +217,7 @@ public class LockManagerTest {
         thread.join();
     }
 
-    @Test public void exclusiveWaitsForExclusiveTest() throws InterruptedException {
+    @Test public void exclusiveWaitsForExclusiveTest() throws InterruptedException, TransactionAbortedException {
         TransactionId tid1 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         lockManager.aquireExclusiveLock(tid1, pageId);
@@ -211,7 +228,11 @@ public class LockManagerTest {
         Thread thread = new Thread(() -> {
             TransactionId tid2 = new TransactionId();
             // should block
-            lockManager.aquireExclusiveLock(tid2, pageId);
+            try {
+                lockManager.aquireExclusiveLock(tid2, pageId);
+            } catch (TransactionAbortedException e) {
+                e.printStackTrace();
+            }
             if (!ref.flag) {
                 Assert.fail("exclusive lock did not wait for exlusive lock");
             }
@@ -227,7 +248,7 @@ public class LockManagerTest {
         thread.join();
     }
 
-    @Test public void exclusiveWaitsForManySharedTest() throws InterruptedException {
+    @Test public void exclusiveWaitsForManySharedTest() throws InterruptedException, TransactionAbortedException {
         int sharedCount = 1001;
         PageId pageId = new HeapPageId(0, 0);
         ArrayList<TransactionId> sharedIds = new ArrayList<>();
@@ -243,7 +264,11 @@ public class LockManagerTest {
         Thread thread = new Thread(() -> {
             TransactionId tid2 = new TransactionId();
             // should block
-            lockManager.aquireExclusiveLock(tid2, pageId);
+            try {
+                lockManager.aquireExclusiveLock(tid2, pageId);
+            } catch (TransactionAbortedException e) {
+                e.printStackTrace();
+            }
             if (ref.releasedCount != sharedCount) {
                 Assert.fail("exclusive lock did not wait for all shared locks");
             }
@@ -261,7 +286,7 @@ public class LockManagerTest {
         thread.join();
     }
 
-    @Test public void sharedWaitsForPendingExclusiveTest() throws InterruptedException, DbException {
+    @Test public void sharedWaitsForPendingExclusiveTest() throws InterruptedException, DbException, TransactionAbortedException {
         int sharedCount = 1001;
         PageId pageId = new HeapPageId(0, 0);
         // aquire some shared locks
@@ -279,14 +304,22 @@ public class LockManagerTest {
         Thread pendingExclusive = new Thread(() -> {
             TransactionId ex1 = new TransactionId();
             // should block
-            lockManager.aquireExclusiveLock(ex1, pageId);
+            try {
+                lockManager.aquireExclusiveLock(ex1, pageId);
+            } catch (TransactionAbortedException e) {
+                e.printStackTrace();
+            }
             System.out.println("supposed pending exclusive locks aquired");
             Assert.assertTrue(prevReleasedWrapper.prevSharedReleased);
             // start a thread to aquire shared lock
             Thread tryLockShare = new Thread(() -> {
                 TransactionId tryShare = new TransactionId();
                 // should block
-                lockManager.aquireSharedLock(tryShare, pageId);
+                try {
+                    lockManager.aquireSharedLock(tryShare, pageId);
+                } catch (TransactionAbortedException e) {
+                    e.printStackTrace();
+                }
                 System.out.println("supposed pending shared locks aquired");
                 Assert.assertTrue(prevReleasedWrapper.prevSharedReleased);
                 try {
