@@ -290,7 +290,7 @@ public class BufferPool {
         // not necessary for lab1
         DbFile evictFile = Database.getCatalog().getDatabaseFile(evictId.getTableId());
         Page evictPage = allocated.get(evictId);
-        if (evictPage.isDirty() == null || !evictPage.isDirty().equals(tid)) {
+        if (evictPage.isDirty() != null) {
             evictFile.writePage(evictPage);
             evictPage.markDirty(false, tid);
         }
@@ -301,7 +301,7 @@ public class BufferPool {
     public synchronized void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
-        for (var pageId : pageAccessSeq) {
+        for (var pageId : evictableSeq) {
             flushPage(pageId, tid);
         }
     }
