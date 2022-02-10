@@ -96,16 +96,14 @@ public class LockManager {
                 }
                 /**
                  * Then, check whether this is an upgrade.
+                 * Not neccessary to check for contains first.
                  */
-                if (sharedTransactions.contains(transactionId)) {
-                    sharedTransactions.remove(transactionId);
-                } else {
-                    /**
-                     * Then, must wait for all shared locks to be released.
-                     */
-                    while (!sharedTransactions.isEmpty()) {
-                        cond.await();
-                    }
+                sharedTransactions.remove(transactionId);
+                /**
+                 * Then, must wait for all shared locks to be released.
+                 */
+                while (!sharedTransactions.isEmpty()) {
+                    cond.await();
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -238,7 +236,7 @@ public class LockManager {
         lockItem.tryReleaseLock(transactionId);
     }
 
-    public void releaseAllLocks(TransactionId transactionId, PageId pageId) {
+    public void releaseAllLocks(TransactionId transactionId) {
         mapLock.lock();
         for (var lockItem : lockMap.values()) {
             lockItem.tryReleaseLock(transactionId);

@@ -6,6 +6,7 @@ import simpledb.common.DbException;
 import simpledb.storage.HeapPageId;
 import simpledb.storage.PageId;
 import simpledb.transaction.LockManager;
+import simpledb.transaction.Transaction;
 import simpledb.transaction.TransactionId;
 
 import java.util.ArrayList;
@@ -16,17 +17,25 @@ public class LockManagerTest {
 
     @Test public void sharedLockTest() {
         TransactionId tid1 = new TransactionId();
+        TransactionId tid2 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         lockManager.aquireSharedLock(tid1, pageId);
         // should not block
-        lockManager.aquireSharedLock(tid1, pageId);
+        lockManager.aquireSharedLock(tid2, pageId);
         try {
             lockManager.releaseSharedLock(tid1, pageId);
+            lockManager.releaseSharedLock(tid2, pageId);
         } catch (DbException e) {
             Assert.fail();
         }
         try {
             lockManager.releaseSharedLock(tid1, pageId);
+            Assert.fail("releasing not aquired lock not throwing");
+        } catch (DbException e) {
+
+        }
+        try {
+            lockManager.releaseSharedLock(tid2, pageId);
             Assert.fail("releasing not aquired lock not throwing");
         } catch (DbException e) {
 
@@ -37,10 +46,20 @@ public class LockManagerTest {
         TransactionId tid1 = new TransactionId();
         PageId pageId = new HeapPageId(0, 0);
         lockManager.aquireExclusiveLock(tid1, pageId);
+        // same lock can be aquired twice by the same transaction
+        // but not by any other transaction
+        lockManager.aquireExclusiveLock(tid1, pageId);
+        // can use an exclusive lock as a shared lock
+        lockManager.aquireSharedLock(tid1, pageId);
+        try {
+            lockManager.releaseSharedLock(tid1, pageId);
+            Assert.fail("release exclusive lock as shared lock");
+        } catch (DbException e) {
+        }
         try {
             lockManager.releaseExclusiveLock(tid1, pageId);
         } catch (DbException e) {
-            Assert.fail();
+            Assert.fail("cannot release aquired lock");
         }
         try {
             lockManager.releaseExclusiveLock(tid1, pageId);
@@ -123,6 +142,35 @@ public class LockManagerTest {
         } catch (DbException e) {
             Assert.fail("failed to release aquired shared lock");
         }
+        thread.join();
+    }
+
+    @Test public void upgradeWaitsForSharedTest() throws InterruptedException {
+        TransactionId tid1 = new TransactionId();
+        PageId pageId = new HeapPageId(0, 0);
+        lockManager.aquireSharedLock(tid1, pageId);
+        var ref = new Object() {
+            boolean flag = false;
+        };
+        // start a thread to aquire exclusive lock
+        Thread thread = new Thread(() -> {
+            TransactionId tid2 = new TransactionId();
+            // should block
+            lockManager.aquireSharedLock(tid2, pageId);
+            lockManager.aquireExclusiveLock(tid2, pageId);
+            if (!ref.flag) {
+                Assert.fail("exclusive lock did not wait for shared lock");
+            }
+        });
+        thread.start();
+        Thread.sleep(500);  // 500ms
+        try {
+            ref.flag = true;
+            lockManager.releaseSharedLock(tid1, pageId);
+        } catch (DbException e) {
+            Assert.fail("failed to release aquired shared lock");
+        }
+        thread.join();
     }
 
     @Test public void sharedWaitsForExclusiveTest() throws InterruptedException {
@@ -149,6 +197,7 @@ public class LockManagerTest {
         } catch (DbException e) {
             Assert.fail("failed to release aquired exclusive lock");
         }
+        thread.join();
     }
 
     @Test public void exclusiveWaitsForExclusiveTest() throws InterruptedException {
@@ -175,6 +224,7 @@ public class LockManagerTest {
         } catch (DbException e) {
             Assert.fail("failed to release aquired exclusive lock");
         }
+        thread.join();
     }
 
     @Test public void exclusiveWaitsForManySharedTest() throws InterruptedException {
