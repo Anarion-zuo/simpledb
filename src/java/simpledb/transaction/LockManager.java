@@ -243,4 +243,84 @@ public class LockManager {
         }
         mapLock.unlock();
     }
+
+    public class WaitGroupNode {
+        private final HashSet<TransactionId> nexts = new HashSet<>();
+        private final HashSet<TransactionId> prevs = new HashSet<>();
+        private final TransactionId myId;
+        private final Lock lock = new ReentrantLock();
+
+        public WaitGroupNode(TransactionId transactionId) {
+            myId = transactionId;
+        }
+
+        public void addWait(TransactionId transactionId) {
+            lock.lock();
+            var next = getWaitNodeByTransactionId(transactionId);
+            this.nexts.add(transactionId);
+            next.prevs.add(myId);
+            lock.unlock();
+        }
+
+        public void addWait(Collection<TransactionId> tids) {
+            for (var tid : tids) {
+                addWait(tid);
+            }
+        }
+
+        public void releaseThis() {
+            lock.lock();
+            for (var next : nexts) {
+                var nextNode = getWaitNodeByTransactionId(next);
+                nextNode.prevs.remove(myId);
+            }
+            for (var prev : prevs) {
+                var prevNode = getWaitNodeByTransactionId(prev);
+                prevNode.nexts.remove(myId);
+            }
+            nexts.clear();
+            prevs.clear();
+            lock.unlock();
+        }
+
+        private boolean checkCycleFromThis(HashSet<TransactionId> path, HashSet<TransactionId> checkedSet) {
+            if (path.contains(this.myId)) {
+                return true;
+            }
+            if (checkedSet.contains(myId)) {
+                return false;
+            }
+            path.add(myId);
+            for (var next : nexts) {
+                if (checkedSet.contains(next)) {
+                    continue;
+                }
+                if (getWaitNodeByTransactionId(next).checkCycleFromThis(path, checkedSet)) {
+                    return true;
+                }
+            }
+            path.remove(myId);
+            checkedSet.add(myId);
+            return false;
+        }
+
+        public boolean checkCycleFromThis() {
+            lock.lock();
+            boolean ret = checkCycleFromThis(new HashSet<>(), new HashSet<>());
+            lock.unlock();
+            return ret;
+        }
+    }
+
+    private final HashMap<TransactionId, WaitGroupNode> waitNodeMap = new HashMap<>();
+
+    public WaitGroupNode getWaitNodeByTransactionId(TransactionId transactionId) {
+        WaitGroupNode node = waitNodeMap.get(transactionId);
+        if (node == null) {
+            node = new WaitGroupNode(transactionId);
+            waitNodeMap.put(transactionId, node);
+        }
+        return node;
+    }
+
 }
