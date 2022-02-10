@@ -3,7 +3,6 @@ package simpledb.storage;
 import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.common.DbException;
-import simpledb.common.DeadlockException;
 import simpledb.transaction.LockManager;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
@@ -11,7 +10,6 @@ import simpledb.transaction.TransactionId;
 import java.io.*;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -63,7 +61,7 @@ public class BufferPool {
     }
 
     private final HashMap<PageId, Page> allocated = new HashMap<>();
-    private final LinkedList<PageId> pageAccessSeq = new LinkedList<>();
+    private final LinkedList<PageId> evictableSeq = new LinkedList<>();
 
     /**
      * Retrieve the specified page with the associated permissions.
@@ -101,8 +99,8 @@ public class BufferPool {
         Page page = allocated.get(pid);
         if (page != null) {
             // move page to seq front
-            pageAccessSeq.remove(pid);
-            pageAccessSeq.add(pid);
+            evictableSeq.remove(pid);
+            evictableSeq.add(pid);
             return page;
         }
         // must allocate
@@ -111,7 +109,7 @@ public class BufferPool {
         if (allocated.size() == numPages) {
             // must evict
             try {
-                evictPage(tid, decideEvict());
+                evictPage(tid, decideEvict(tid));
             } catch (DbException e) {
                 e.printStackTrace();
             } catch (IOException e) {
@@ -122,7 +120,7 @@ public class BufferPool {
 
         page = dbFile.readPage(pid);
         allocated.put(pid, page);
-        pageAccessSeq.add(pid);
+        evictableSeq.add(pid);
         return page;
     }
 
@@ -197,6 +195,16 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid, boolean commit) {
         // some code goes here
         // not necessary for lab1|lab2
+        if (commit) {
+            try {
+                flushPages(tid);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+            abortPages(tid);
+        }
+        lockManager.releaseAllLocks(tid);
     }
 
     /**
@@ -243,7 +251,7 @@ public class BufferPool {
      * @param tid the transaction deleting the tuple.
      * @param t the tuple to delete
      */
-    public  void deleteTuple(TransactionId tid, Tuple t)
+    public void deleteTuple(TransactionId tid, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
